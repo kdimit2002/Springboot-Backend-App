@@ -1,0 +1,14 @@
+@startuml
+skinparam classAttributeIconSize 0
+
+' Entities
+class User
+class Auction
+class Bid
+
+' Relations (παράδειγμα)
+User "1" -- "*" Auction : owns
+Auction "1" -- "*" Bid : has
+User "1" -- "*" Bid : places
+
+@enduml
