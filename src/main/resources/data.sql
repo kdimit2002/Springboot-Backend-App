@@ -1,0 +1,248 @@
+---- ============================================
+---- ROLES
+---- ============================================
+--INSERT INTO roles (id, name) VALUES (1, 'Admin');
+--INSERT INTO roles (id, name) VALUES (2, 'Auctioneer');
+--INSERT INTO roles (id, name) VALUES (3, 'Bidder');
+--
+---- ============================================
+---- CATEGORIES
+---- ============================================
+--INSERT INTO categories (id, category_name) VALUES (10, 'Electronics');
+--INSERT INTO categories (id, category_name) VALUES (11, 'Furniture');
+--INSERT INTO categories (id, category_name) VALUES (12, 'Collectibles');
+----
+------ ============================================
+------ USERS
+------  demo_seller με id = 2 (owner των auctions)
+------ ============================================
+----INSERT INTO users (
+----    id,
+----    name,
+----    email,
+----    phone_number,
+----    firebase_id,
+----    avatar,
+----    is_banned,
+----    is_anonymized,
+----    eligible_for_chat,
+----    version
+----)
+----VALUES (
+----    10,
+----    'demo_seller',
+----    'seller@example.com',
+----    '7000000000',
+----    'firebase_demo_seller',
+----    'GIRL_AVATAR',         -- valid τιμή από το Avatar enum
+----    FALSE,
+----    FALSE,
+----    TRUE,
+----    0
+----);
+----
+----
+----
+----INSERT INTO users (
+----    name,
+----    email,
+----    phone_number,
+----    firebase_id,
+----    reward_points,
+----    all_time_reward_points,
+----    avatar,
+----    is_banned,
+----    is_anonymized,
+----    created_at,
+----    updated_at,
+----    modified_by,
+----    profile_last_updated_at,
+----    version,
+----    eligible_for_chat
+----) VALUES (
+----    'anonymous_user',                 -- μοναδικό username που δεν θα χρησιμοποιήσει κανείς
+----    'anonymous@system.local',         -- fake email μόνο για internal χρήση
+----    '0000000000',                     -- fake phone (απλά να είναι unique)
+----    'ANONYMOUS_USER',                 -- ΠΟΛΥ ΣΗΜΑΝΤΙΚΟ: firebase_id για τον anonymous
+----    0,                                -- reward_points
+----    0,                                -- all_time_reward_points
+----    'DEFAULT_AVATAR',                 -- πρέπει να ταιριάζει με το Avatar enum σου
+----    FALSE,                            -- is_banned
+----    FALSE,                            -- is_anonymized (δεν είναι GDPR anonymization, είναι system account)
+----    CURRENT_TIMESTAMP,                -- created_at
+----    CURRENT_TIMESTAMP,                -- updated_at
+----    'system',                         -- modified_by
+----    NULL,                             -- profile_last_updated_at
+----    0,                                -- version
+----    FALSE                             -- eligible_for_chat (δεν χρειάζεται chat ο anonymous)
+----);
+----
+----
+----
+------ ============================================
+------ USER LOCATIONS
+------ Προσοχή: το Region πρέπει να ταιριάζει με το Region enum σου
+------ π.χ. αν το enum έχει NICOSIA, LIMASSOL κλπ, χρησιμοποίησε μια από αυτές.
+------ Εδώ βάζω ενδεικτικά 'NICOSIA'
+------ ============================================
+----INSERT INTO user_locations (
+----    id,
+----    user_id,
+----    country,
+----    region
+----)
+----VALUES (
+----    10,
+----    10,                         -- demo_seller
+----    'Cyprus',
+----    'NICOSIA'               -- ΠΡΟΣΑΡΜΟΣΕ το αν το enum έχει άλλη τιμή
+----);
+----
+------ ============================================
+------ AUCTIONS
+------  Χρησιμοποιούν:
+------    status (ENUM AuctionStatus: π.χ. ACTIVE, PENDING_APPROVAL, EXPIRED...)
+------    short_description (για τη λίστα)
+------    description        (αναλυτική, για /auctions/{id})
+------ ============================================
+----
+------ 1) Auction στην κατηγορία 1, ACTIVE, λήγει σε 5 μέρες
+----INSERT INTO auctions (
+----    category_id,
+----    status,
+----    owner_id,
+----    min_bid_increment,
+----    title,
+----    short_description,
+----    description,
+----    starting_amount,
+----    start_date,
+----    end_date,
+----    shipping_cost_payer
+----    )
+----VALUES (
+----    10,
+----    'ACTIVE',
+----    10, -- demo_seller
+----    5,
+----    'Gaming Laptop',
+----    'Used gaming laptop.',
+----    'Used gaming laptop in good condition, with 16GB RAM, SSD and dedicated GPU. Perfect for gaming and work.',
+----    500.00,
+----    '2025-11-20 10:00:00',
+----    '2025-12-26 15:19:00',
+----    'SELLER'
+----);
+----
+------ 2) Auction στην κατηγορία 1, ACTIVE, λήγει πιο νωρίς
+----INSERT INTO auctions (
+----    category_id,
+----    status,
+----    owner_id,
+----    min_bid_increment,
+----    title,
+----    short_description,
+----    description,
+----    starting_amount,
+----    start_date,
+----    end_date,
+----    shipping_cost_payer
+----)
+----VALUES (
+----    10,
+----    'ACTIVE',
+----    10,
+----    2,
+----    'Wireless Headphones',
+----    'Noise cancelling wireless headphones.',
+----    'Noise cancelling over-ear wireless headphones, great battery life and very comfortable for long use.',
+----    80.00,
+----    '2025-11-20 09:00:00',
+----    '2025-12-26 21:00:00',
+----    'SPLIT'
+----);
+----
+------ 3) Auction στην κατηγορία 2 (Furniture)
+----INSERT INTO auctions (
+----    category_id,
+----    status,
+----    owner_id,
+----    min_bid_increment,
+----    title,
+----    short_description,
+----    description,
+----    starting_amount,
+----    start_date,
+----    end_date,
+----    shipping_cost_payer
+----    )
+----VALUES (
+----    11,
+----    'ACTIVE',
+----    10,
+----    5,
+----    'Office Chair',
+----    'Ergonomic office chair.',
+----    'Ergonomic office chair, almost new, adjustable height and lumbar support, ideal for home office or workplace.',
+----    120.00,
+----    '2025-11-19 12:00:00',
+----    '2025-12-28 12:00:00',
+----    'SELLER'
+----    );
+----
+------ 4) Auction στην κατηγορία 3 (Collectibles)
+----INSERT INTO auctions (
+----    category_id,
+----    status,
+----    owner_id,
+----    min_bid_increment,
+----    title,
+----    short_description,
+----    description,
+----    starting_amount,
+----    start_date,
+----    end_date,
+----    shipping_cost_payer
+----)
+----VALUES (
+----    12,
+----    'ACTIVE',
+----    10,
+----    1,
+----    'Vintage Coin Collection',
+----    'Old coin collection.',
+----    'Vintage coin collection with coins from various years and countries, perfect for collectors.',
+----    200.00,
+----    '2025-11-15 10:00:00',
+----    '2025-12-08 17:23:00',
+----    'SELLER'
+----);
+----
+----
+------ 4) Auction στην κατηγορία 3 (Collectibles)
+----INSERT INTO auctions (
+----    category_id,
+----    status,
+----    owner_id,
+----    min_bid_increment,
+----    title,
+----    short_description,
+----    description,
+----    starting_amount,
+----    start_date,
+----    end_date,
+----    shipping_cost_payer
+----)
+----VALUES (
+----    12,
+----    'ACTIVE',
+----    10,
+----    1,
+----    'Vintage Coin Collection',
+----    'Old coin collection.',
+----    'Vintage coin collection with coins from various years and countries, perfect for collectors.',
+----    200.00,
+----    '2025-11-26 10:00:00',
+----    '2025-11-26 11:58:00',
+----    'SPLIT'
+----);
