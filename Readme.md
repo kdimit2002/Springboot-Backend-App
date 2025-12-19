@@ -1,4 +1,5 @@
 ![Architecture Diagram](docs/architecture.png)
+*Diagram shows an optional active–passive deployment model; current deployment uses a single instance.*
 
 ## Architecture (High-level)
 
@@ -11,7 +12,7 @@
 - **Storage:** Images are stored in **Cloudflare R2** and served via **public URLs**.
 - **Image flow:** Backend uploads images to R2, stores the public URL in the DB, and returns URLs to the frontend. The browser then loads images directly from R2.
 - **Failover:** API runs in an active–passive setup behind a load balancer (routes traffic to Primary; fails over to Standby on health check failure).
-
+- **Scheduler Execution Model:** Scheduled jobs are enabled only on the primary instance, if primary is down,then secondary's instance schedulers are automatically enabled
 ---
 
 ## Tech Stack
@@ -27,25 +28,23 @@
 
 ### Persistence (JPA / Database)
 - **JPA/Hibernate** is used for persistence and domain modeling.
-- An **Admin user** is created manually in the database as a bootstrap account for initial system access / management.
+- An **Admin user** is created manually in the database for security.
 
 ### Async Processing (Notifications / Emails / Auditing)
-- Notifications and email events are handled **asynchronously** to keep request latency low and avoid blocking user-facing flows.
-- Notification/email activities are **logged to the database** to support:
+- Notifications and email events are handled **asynchronously** to keep request latency low.
+- Each Api call is **logged to the database** to support:
   - **Auditability** (who/what/when),
-  - **Analytics** (usage patterns),
-  - **Troubleshooting** (delivery attempts / failures).
+  - **Analytics** 
 
 ### Caching Strategy
 - **Auction caching (Cache Manager):**
   - Auction reads are cached to reduce DB load.
-  - Cache expires after **~2 hours** (chosen due to low traffic / few users), and is **invalidated on writes** to avoid stale state.
 - **Rate limiting cache:**
   - Cache-backed counters are used to enforce request rate limiting efficiently without hitting the DB.
 
-### Reliability: Retry Services (Resilience to transient failures)
+### Reliability: Retry Services 
 To reduce failure rates caused by transient connectivity issues:
-- **FirebaseRetryService** retries transient Firebase calls using a controlled retry strategy.
+- **FirebaseRetryService** retries transient Firebase calls, in order to maintain a high level of consistency with the database.. 
 - **R2RetryService** retries transient Cloudflare R2 operations (uploads/updates) to improve success rates.
 - Retries are designed to be **bounded** (no infinite loops) and safe for transient network errors.
 
@@ -53,19 +52,21 @@ To reduce failure rates caused by transient connectivity issues:
 Schedulers are used for lifecycle management and consistency:
 
 - **Auction expiration scheduler**
-  - Periodically marks auctions as **expired** based on business rules/time.
+  - Periodically marks auctions as **expired**.
 
 - **Reminders scheduler**
-  - Sends reminder notifications/emails (async) for time-sensitive auction events.
+  - Sends reminder notifications/emails.
 
 - **Nightly consistency scheduler (DB ↔ Firebase)**
   - Ensures the system remains consistent between **PostgreSQL** (application source-of-truth) and **Firebase Auth** (identity provider).
   - Example actions:
-    - If a user exists in **Firebase** but is missing in **DB** → the Firebase user is **deleted** (cleanup of orphan identities).
+    - If a user exists in **Firebase** but is missing in **DB** → the Firebase user is **deleted**.
     - If Firebase user metadata differs from DB → Firebase data is **updated** to match DB.
 
 ### Security (API Boundary)
 - **RateLimiter filter** (cache-backed) protects the API from abuse and reduces brute-force attempts.
+  - For public Apis cache user's IP
+  - For secured Apis cache user's firebase Id.
 - **Firebase auth filter** enforces:
   - Presence/validity of `Bearer idToken`,
   - User existence in the application database (prevents "valid token but unknown user" edge cases).
@@ -77,14 +78,16 @@ Schedulers are used for lifecycle management and consistency:
 
 ## Realtime Features (Roadmap)
 
-### WebSockets (Planned)
-Real-time communication is planned to support:
-- **Live bids updates** in auctions (avoid polling, improve UX, reduce redundant traffic).
+### WebSockets
+Real-time communication supports:
+- **Live bids updates** in auctions.
 - **Auction chat** between participants with near real-time delivery.
 
-Implementation will include:
-- Authenticated WebSocket sessions (token-based),
-- Event-driven updates (bid placed / auction state change / chat message).
+Implementation includes, Event-driven updates.
+
+WebSocket communication does not use an intermediate message broker
+- As a result, WebSocket connections are handled by a **single active application instance** at any given time.
+
 
 
 ---
@@ -93,7 +96,7 @@ Implementation will include:
 
 ### Firebase Authentication
 
-#### Sign In Flow
+#### Planned: Sign In Flow
 - **User signs in on the client** using email/password via Firebase Authentication.
 - Firebase returns **`idToken`, `refreshToken`, `localId`** to the browser.
 - The browser calls the backend **`GET /api/auth/login`** with `Authorization: Bearer <idToken>`.
@@ -101,7 +104,7 @@ Implementation will include:
 
 ![Sign In Flow](docs/SignInFlow.png)
 
-#### Sign Up Flow
+#### Planned: Sign Up Flow
 - The client checks **username availability** via the backend before creating an auth account.
 - The client completes the Firebase registration flow and obtains a valid **ID token**.
 - The browser sends the final signup payload to the backend with `Authorization: Bearer <idToken>`.
@@ -114,7 +117,7 @@ Implementation will include:
 
 ### Cloudflare R2 Object Storage
 
-#### Get Image Flow
+#### Planned: Get Image Flow
 - The browser fetches application data from the backend (e.g., auctions), which includes **public image URLs** stored in the DB.
 - The browser then downloads images **directly from Cloudflare R2** using those URLs.
 - This keeps the backend out of the heavy bandwidth path and improves performance.
