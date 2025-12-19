@@ -11,8 +11,9 @@
 - **Database:** PostgreSQL stores application data (users, auctions, bids).
 - **Storage:** Images are stored in **Cloudflare R2** and served via **public URLs**.
 - **Image flow:** Backend uploads images to R2, stores the public URL in the DB, and returns URLs to the frontend. The browser then loads images directly from R2.
-- **Failover:** API runs in an active–passive setup behind a load balancer (routes traffic to Primary; fails over to Standby on health check failure).
-- **Scheduler Execution Model:** Scheduled jobs are enabled only on the primary instance, if primary is down,then secondary's instance schedulers are automatically enabled
+- **Planned: Failover:** API runs in an active–passive setup behind a load balancer (routes traffic to Primary; fails over to Standby on health check failure).
+- **Planned: Scheduler Execution Model:** Scheduled jobs are enabled only on the primary instance, if primary is down,then secondary's instance schedulers are automatically enabled
+- **Planned: Disaster Recovery Database:** Weekly exports.
 ---
 
 ## Tech Stack
