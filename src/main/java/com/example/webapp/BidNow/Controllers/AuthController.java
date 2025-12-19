@@ -225,11 +225,11 @@ public class AuthController {
 
 
     /** Response for username availability check. */
-    public record UsernameAvailabilityResponse(boolean available) {}
+    public record UsernameAvailabilityResponse(boolean exists) {}
 
 
     /**
-     * Check if a username is available.
+     * Check if a username exists.
      *
      * This Api checks if a username is already picked by another user
      * because firebase can't provide this functionality for us
