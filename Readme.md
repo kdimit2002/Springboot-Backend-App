@@ -29,8 +29,9 @@
 ![Flows Diagram](docs/SignIn_SingUp_Flow.png)
 
 ### Firebase
-
+----------------------------------
 
 ![Flows Diagram](docs/R2StorafeFlow.png)
 
 ### Cloudfare Object Storage R2
+----------------------------------
