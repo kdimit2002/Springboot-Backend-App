@@ -26,19 +26,16 @@
 ## Main External Apis Communication Flows
 
 
-![Flows Diagram](docs/SignInFlow.png)
-
 ## Firebase
 
 ![Flows Diagram](docs/SignInFlow.png)
 ### Sign in flow:
 
 
-![Flows Diagram](docs/R2StorafeFlow.png)
+![Flows Diagram](docs/SignUpFlow.png)
 ### Sign up flow:
 
 ### Cloudfare Object Storage R2
-----------------------------------
 ![Flows Diagram](docs/R2StorafeGetImageFlow.png)
 ### Get Image flow:
 
