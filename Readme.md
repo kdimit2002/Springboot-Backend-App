@@ -23,6 +23,72 @@
 
 ---
 
+## System Internals (Design Notes)
+
+### Persistence (JPA / Database)
+- **JPA/Hibernate** is used for persistence and domain modeling.
+- An **Admin user** is created manually in the database as a bootstrap account for initial system access / management.
+
+### Async Processing (Notifications / Emails / Auditing)
+- Notifications and email events are handled **asynchronously** to keep request latency low and avoid blocking user-facing flows.
+- Notification/email activities are **logged to the database** to support:
+  - **Auditability** (who/what/when),
+  - **Analytics** (usage patterns),
+  - **Troubleshooting** (delivery attempts / failures).
+
+### Caching Strategy
+- **Auction caching (Cache Manager):**
+  - Auction reads are cached to reduce DB load.
+  - Cache expires after **~2 hours** (chosen due to low traffic / few users), and is **invalidated on writes** to avoid stale state.
+- **Rate limiting cache:**
+  - Cache-backed counters are used to enforce request rate limiting efficiently without hitting the DB.
+
+### Reliability: Retry Services (Resilience to transient failures)
+To reduce failure rates caused by transient connectivity issues:
+- **FirebaseRetryService** retries transient Firebase calls using a controlled retry strategy.
+- **R2RetryService** retries transient Cloudflare R2 operations (uploads/updates) to improve success rates.
+- Retries are designed to be **bounded** (no infinite loops) and safe for transient network errors.
+
+### Schedulers (Background Jobs)
+Schedulers are used for lifecycle management and consistency:
+
+- **Auction expiration scheduler**
+  - Periodically marks auctions as **expired** based on business rules/time.
+
+- **Reminders scheduler**
+  - Sends reminder notifications/emails (async) for time-sensitive auction events.
+
+- **Nightly consistency scheduler (DB ↔ Firebase)**
+  - Ensures the system remains consistent between **PostgreSQL** (application source-of-truth) and **Firebase Auth** (identity provider).
+  - Example actions:
+    - If a user exists in **Firebase** but is missing in **DB** → the Firebase user is **deleted** (cleanup of orphan identities).
+    - If Firebase user metadata differs from DB → Firebase data is **updated** to match DB.
+
+### Security (API Boundary)
+- **RateLimiter filter** (cache-backed) protects the API from abuse and reduces brute-force attempts.
+- **Firebase auth filter** enforces:
+  - Presence/validity of `Bearer idToken`,
+  - User existence in the application database (prevents "valid token but unknown user" edge cases).
+
+#### Planned Security Improvements
+- **XSSSanitizationFilter** is planned to sanitize untrusted inputs at the API boundary.
+
+---
+
+## Realtime Features (Roadmap)
+
+### WebSockets (Planned)
+Real-time communication is planned to support:
+- **Live bids updates** in auctions (avoid polling, improve UX, reduce redundant traffic).
+- **Auction chat** between participants with near real-time delivery.
+
+Implementation will include:
+- Authenticated WebSocket sessions (token-based),
+- Event-driven updates (bid placed / auction state change / chat message).
+
+
+---
+
 ## Main External APIs Communication Flows
 
 ### Firebase Authentication
