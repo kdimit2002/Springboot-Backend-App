@@ -15,4 +15,4 @@
 
 
 
-![Architecture Diagram](docs/SignupFlow.png)
+![Architecture Diagram](docs/SignIn_SingUp_Flow.png)
