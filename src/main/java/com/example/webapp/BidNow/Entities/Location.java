@@ -14,7 +14,7 @@ public class Location {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Ο χρήστης στον οποίο ανήκει αυτή η τοποθεσία
+    // User tha owns the location
     @OneToOne
     @JoinColumn(name = "user_id", nullable = false)
     private UserEntity user;
@@ -40,7 +40,6 @@ public class Location {
     @Size(max = 20)
     private String postalCode;
 
-    // Προαιρετικά – αν δεν σε νοιάζουν, μπορείς να τα αφαιρέσεις
     @Column(precision = 10, scale = 6)
     private BigDecimal latitude;
 

@@ -19,6 +19,16 @@ import java.util.List;
 
 import static com.example.webapp.BidNow.helpers.UserEntityHelper.getUserFirebaseId;
 
+/**
+ * NotificationService
+ *
+ * Returns the user's "inbox" by combining:
+ * - Personal notifications (stored per user)
+ * - Global announcements (visible to everyone)
+ *
+ * The two lists are merged in-memory and returned as a single paginated feed,
+ * sorted by (createdAt desc, id desc).
+ */
 @Service
 public class NotificationService {
 
@@ -40,39 +50,48 @@ public class NotificationService {
     @Transactional
     public Page<NotificationDto> getMyNotifications(int page, int size) {
 
+        // Basic pagination guards.
         if (size > 100) size = 100;
         if (size <= 0) size = 20;
         if (page < 0) page = 0;
 
+        // Feed ordering.
         Sort sort = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
 
+        // Resolve current user.
         UserEntity user = userEntityRepository.findByFirebaseId(getUserFirebaseId())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        // σωστό merge pagination: τραβάμε top (page+1)*size από κάθε πηγή
+        // Pull enough items from each source so we can merge and then cut the requested page.
         int limit = (page + 1) * size;
         Pageable topN = PageRequest.of(0, limit, sort);
 
+        // Personal notifications (mapped to DTOs).
         List<NotificationDto> personal = notificationRepository
                 .findByUser_FirebaseId(user.getFirebaseId(), topN)
-                .map(notificationMapper::toDto) // ⚠️ με βάση το mapper που έχεις
+                .map(notificationMapper::toDto)
                 .getContent();
 
-        if(!personal.isEmpty())
+        // Mark personal notifications as read when the user fetches them.
+        if (!personal.isEmpty()) {
             notificationRepository.markAllReadByFirebaseId(getUserFirebaseId(), LocalDateTime.now());
+        }
 
-
+        // Global announcements (also mapped to NotificationDto shape).
         List<NotificationDto> announcements = announcementRepository
                 .findAll(topN)
                 .map(this::announcementToDto)
                 .getContent();
 
+        // Merge both lists into one sorted feed.
         List<NotificationDto> merged = mergeSorted(personal, announcements);
 
+        // Manual pagination on the merged list.
         int from = page * size;
         int to = Math.min(from + size, merged.size());
         List<NotificationDto> content = from >= merged.size() ? List.of() : merged.subList(from, to);
 
+        // Total count = personal count + announcements count.
         long total = notificationRepository.countByUser_FirebaseId(user.getFirebaseId())
                 + announcementRepository.count();
 
@@ -80,18 +99,30 @@ public class NotificationService {
     }
 
     private NotificationDto announcementToDto(Announcement a) {
+        // Use negative ids so announcements never collide with real notification ids.
         return new NotificationDto(
-                -a.getId(),                 // 👈 αρνητικό id για announcements
-                a.getType().name(),         // "GENERAL"
+                -a.getId(),//todo: maybe should remove id
+                a.getType().name(),
                 a.getTitle(),
                 a.getBody(),
-                true,                       // 👈 δεν σε νοιάζει read, άστο true
+                true, // announcements don't use read/unread logic
                 a.getCreatedAt(),
                 a.getMetadataJson()
         );
     }
 
+
+    /**
+     * Merges two already-sorted notification lists into a single sorted list.
+     * Both inputs must be sorted DESC by (createdAt, id).
+     * This is the merge step of merge-sort and runs in O(n + m) time.
+     *
+     * @param a
+     * @param b
+     * @return
+     */
     private List<NotificationDto> mergeSorted(List<NotificationDto> a, List<NotificationDto> b) {
+        // Classic merge (like merge-sort): both lists are already sorted desc by createdAt/id.
         int i = 0, j = 0;
         List<NotificationDto> out = new ArrayList<>(a.size() + b.size());
 

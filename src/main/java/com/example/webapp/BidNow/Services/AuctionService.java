@@ -30,6 +30,10 @@ import java.util.*;
 
 import static com.example.webapp.BidNow.helpers.UserEntityHelper.getUserFirebaseId;
 
+/**
+ * Service for managing auctions
+ *
+ */
 @Service
 public class AuctionService {
 
@@ -44,10 +48,11 @@ public class AuctionService {
     private final LocationRepository locationRepository;
     private final EmailService emailService;
     private final ApplicationEventPublisher eventPublisher;
+    // Minimum fuzzy score for accepting fuzzy matches (higher => stricter matching).
     private static final int FUZZY_MIN_SCORE = 9;
 
 
-    // Fuzzy search (EN – μπορείς να αλλάξεις σε Locale.forLanguageTag("el"))
+    // Fuzzy search locale todo: (currently EN; change to Locale.forLanguageTag("el") if needed).
     private final FuzzyScore fuzzyScore = new FuzzyScore(Locale.ENGLISH);
 
     public AuctionService(UserActivityService userActivityService, AuctionMessageRepository auctionMessageRepository, AuctionRepository auctionRepository, NotificationRepository notificationRepository,
@@ -68,32 +73,37 @@ public class AuctionService {
         this.eventPublisher = eventPublisher;
     }
 
-    // ---------------------------------------------------
-    // CREATE AUCTION
-    // ---------------------------------------------------
+    /**
+     * Create auction
+     *
+     * @param request
+     * @return
+     */
     @CachePut(cacheNames = "auctionById", key = "#result.id")
     @Transactional
     public AuctionResponseDto createAuction(AuctionCreateRequest request) {
 
-        // 1. Τρέχων χρήστης (firebaseId)
+        // Current authenticated user
         UserEntity owner = userEntityRepository.findByFirebaseId(getUserFirebaseId()).orElseThrow(()->  new ResourceNotFoundException("User not found"));
 
+        // Mark user as eligible for chat (users that created auction can now chat in all auctions chats) .
         owner.setEligibleForChat(true);
 
-        // 2. Anti-spam: max 5 auctions / 10 λεπτά
+        // Anti-spam: allow at most 5 auctions per 10 minutes per owner.
         LocalDateTime cutoff = LocalDateTime.now().minusMinutes(10);
         long recentAuctions = auctionRepository.countByOwnerAndCreatedAtAfter(owner, cutoff);
         if (recentAuctions >= 5) {
+            //todo: send email
             throw new TooManyRequestsException(
                     "You have created too many auctions recently. Please try again later."
             );
         }
 
-        // 3. Κατηγορία
+        // Validate category existence.
         Category category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
 
-        // 4. Δημιουργία Auction
+        // Build auction entity from request.
         Auction auction = new Auction();
         auction.setCategory(category);
         auction.setOwner(owner);
@@ -107,14 +117,15 @@ public class AuctionService {
         auction.setShippingCostPayer(request.getShippingCostPayer());
 
 
-        // Status αντί για isActive
+        // New auctions must be approved by admin first.
         auction.setStatus(AuctionStatus.PENDING_APPROVAL);
 
+        // logging
         Auction saved = auctionRepository.save(auction);
         userActivityService.saveUserActivityAsync(Endpoint.CREATE_AUCTION,"User: " + getUserFirebaseId() + ", AuctionId: " + auction.getId());
 
 
-        // 5. Μετά το COMMIT στέλνουμε email στον admin
+        // Send admin email ONLY after the transaction commits successfully.
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
@@ -141,13 +152,23 @@ public class AuctionService {
             }
         });
 
-        // Επιστρέφουμε FULL DETAILS DTO
         return toDetailsDto(saved);
     }
 
-    // ---------------------------------------------------
-    // GET ACTIVE AUCTIONS (LIST)  + FILTERS + SEARCH
-    // ---------------------------------------------------
+    /**
+     * Get active auctions
+     *
+     * Uses pagination, filters and search
+     * @param sortBy
+     * @param direction
+     * @param categoryId
+     * @param page
+     * @param size
+     * @param keyword
+     * @param region
+     * @param country
+     * @return
+     */
     @Transactional
     public Page<AuctionListItemDto> getActiveAuctions(
             String sortBy,
@@ -187,12 +208,9 @@ public class AuctionService {
         boolean hasLocationFilter =
                 regionFilter != null || (country != null && !country.isBlank());
 
-        // -----------------------------------
-        // 1) ΧΩΡΙΣ keyword (search == null)
-        // -----------------------------------
+
         if (!hasKeyword) {
 
-            // 1a) ΧΩΡΙΣ location filter → μόνο DB
             if (!hasLocationFilter) {
                 Page<Auction> auctionsPage;
                 if (categoryId != null) {
@@ -209,7 +227,6 @@ public class AuctionService {
                 return auctionsPage.map(this::toListDto);
             }
 
-            // 1b) ΜΕ location filter → φέρνουμε όλα active, φιλτράρουμε in-memory
             List<Auction> base;
             if (categoryId != null) {
                 base = auctionRepository
@@ -234,11 +251,8 @@ public class AuctionService {
             return pageResult.map(this::toListDto);
         }
 
-        // -----------------------------------
-        // 2) ΜΕ keyword (search)
-        // -----------------------------------
+
         if (!hasLocationFilter) {
-            // 2a) Keyword αλλά ΧΩΡΙΣ location → όπως πριν
 
             Page<Auction> auctionsPage;
             if (categoryId != null) {
@@ -255,7 +269,6 @@ public class AuctionService {
                 return auctionsPage.map(this::toListDto);
             }
 
-            // Fuzzy fallback ΧΩΡΙΣ location
             List<Auction> candidates;
             if (categoryId != null) {
                 candidates = auctionRepository
@@ -287,7 +300,6 @@ public class AuctionService {
             return fuzzyPage.map(this::toListDto);
         }
 
-        // 2b) Keyword ΚΑΙ location filter → DB + in-memory location + μετά fuzzy
         List<Auction> baseSearch;
         if (categoryId != null) {
             baseSearch = auctionRepository.searchActiveAuctionsByCategory(
@@ -309,7 +321,6 @@ public class AuctionService {
             return pageResult.map(this::toListDto);
         }
 
-        // Fuzzy fallback ΜΕ location
         List<Auction> baseCandidates;
         if (categoryId != null) {
             baseCandidates = auctionRepository
@@ -344,9 +355,21 @@ public class AuctionService {
     }
 
 
-    // ---------------------------------------------------
-    // GET EXPIRED (last N days) – LIST
-    // ---------------------------------------------------
+    /**
+     * Get expired auctions method
+     *
+     * User's can see some recent expired auctions
+     *
+     * @param days
+     * @param sortBy
+     * @param direction
+     * @param categoryId
+     * @param page
+     * @param size
+     * @param region
+     * @param country
+     * @return
+     */
     @Transactional
     public Page<AuctionListItemDto> getExpiredAuctionsLastDays(
             int days,
@@ -387,7 +410,6 @@ public class AuctionService {
         boolean hasLocationFilter =
                 regionFilter != null || (country != null && !country.isBlank());
 
-        // ΧΩΡΙΣ location filter → μόνο DB
         if (!hasLocationFilter) {
             Page<Auction> auctionsPage;
             if (categoryId != null) {
@@ -404,7 +426,6 @@ public class AuctionService {
             return auctionsPage.map(this::toListDto);
         }
 
-        // ΜΕ location filter → φέρνουμε όλα expired, φιλτράρουμε in-memory
         List<Auction> base;
         if (categoryId != null) {
             base = auctionRepository
@@ -430,9 +451,15 @@ public class AuctionService {
     }
 
 
-    // ---------------------------------------------------
-    // GET auction/{id} – FULL DETAILS
-    // ---------------------------------------------------
+    /**
+     * Get specific auction
+     *
+     * Users can view auction's full details
+     *
+     *
+     * @param auctionId
+     * @return
+     */
     @Transactional(readOnly = true)
     public AuctionResponseDto getAuctionById(Long auctionId) {
         log.info("Auction: {} cache miss", auctionId);
@@ -441,7 +468,6 @@ public class AuctionService {
         Auction auction = auctionRepository.findById(auctionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Auction not found"));
 
-        // Έλεγχος για endDate > 1 μήνα πριν
         LocalDateTime oneMonthAgo = LocalDateTime.now().minusMonths(1);
 
         if (auction.getEndDate().isBefore(oneMonthAgo))
@@ -453,9 +479,11 @@ public class AuctionService {
         return toDetailsDto(auction);
     }
 
-    // ---------------------------------------------------
-    // APPROVE + PENDING (ADMIN)
-    // ---------------------------------------------------
+    /**
+     * Admin approves an auction
+     *
+     * @param auctionId
+     */
     @Transactional
     public void approveAuction(Long auctionId) {
         Auction auction = auctionRepository.findById(auctionId)
@@ -472,7 +500,6 @@ public class AuctionService {
         auction.setStatus(AuctionStatus.ACTIVE);
         auctionRepository.save(auction);
 
-        // ✅ Notification στον owner (AFTER_COMMIT μέσω listener)
         Long ownerId = auction.getOwner().getId();
 
         String metadata = "{\"auctionId\":" + auction.getId()
@@ -496,20 +523,6 @@ public class AuctionService {
                 .toList();
     }
 
-    // ---------------------------------------------------
-    // EXPIRED STATUS REFRESH
-    // ---------------------------------------------------
-//    @Transactional
-//    public void refreshExpiredAuctions() {
-//        LocalDateTime now = LocalDateTime.now();
-//
-//        List<Auction> toExpire = auctionRepository
-//                .findByStatusAndEndDateBefore(AuctionStatus.ACTIVE, now);
-//
-//        for (Auction auction : toExpire) {
-//            auction.setStatus(AuctionStatus.EXPIRED);
-//        }
-//    }
 
     // ---------------------------------------------------
     // MAPPERS
@@ -552,19 +565,6 @@ public class AuctionService {
                 ))
                 .toList();
 
-//        List<AuctionMessage> auctionMessages =
-//                auctionMessageRepository.findByAuctionId(auction.getId());
-//
-//        List<ChatMessageResponse> chatMessageResponses = auctionMessages
-//                .stream()
-//                .map(c -> new ChatMessageResponse(
-//                        c.getId(),
-//                        c.getSender().getUsername(),
-//                        c.getSender().getFirebaseId(),
-//                        c.getContent(),
-//                        c.getCreatedAt()
-//                ))
-//                .toList();
 
         List<AuctionMessage> auctionMessages =
                 auctionMessageRepository.findByAuctionIdOrderByCreatedAtAsc(auction.getId());
@@ -633,7 +633,6 @@ public class AuctionService {
 
         UserEntity owner = auction.getOwner();
 
-        // Location (αν δεν υπάρχει, απλά null ή "Unknown")
         String sellerLocation = null;
         if (owner != null) {
             Location location = locationRepository.findByUser(owner).orElse(null);
@@ -652,9 +651,6 @@ public class AuctionService {
         BigDecimal topBidAmount = null;
         String topBidderUsername = null;
         if (auction.getBids() != null && !auction.getBids().isEmpty()) {
-//            Bid topBid = auction.getBids().stream()
-//                    .max(Comparator.comparing(Bid::getAmount))
-//                    .orElse(null);
             Bid topBid = auction.getBids().isEmpty()
                     ? null
                     : auction.getBids().get(0);
@@ -687,7 +683,6 @@ public class AuctionService {
     }
 
 
-    // Map Location → LocationDto (Location του seller)
     private LocationDto mapLocation(UserEntity owner) {
         if (owner == null) {
             return null;
@@ -702,7 +697,6 @@ public class AuctionService {
                 location.getPostalCode());
     }
 
-    // Fuzzy score για τίτλο + περιγραφή
     private int computeFuzzyScore(Auction auction, String keyword) {
         String title = auction.getTitle() != null ? auction.getTitle() : "";
         String description = auction.getDescription() != null ? auction.getDescription() : "";
@@ -713,7 +707,6 @@ public class AuctionService {
         return Math.max(scoreTitle, scoreDesc);
     }
 
-    // Μετατρέπει List -> Page (για fuzzy fallback)
     private <T> Page<T> toPage(List<T> list, Pageable pageable) {
         int total = list.size();
         int start = (int) pageable.getOffset();
@@ -737,7 +730,6 @@ public class AuctionService {
     }
 
     private boolean matchesLocation(Auction auction, Region regionFilter, String countryFilter) {
-        // Αν δεν έχει δοθεί ούτε region ούτε country → δεν φιλτράρουμε
         if (regionFilter == null && (countryFilter == null || countryFilter.isBlank())) {
             return true;
         }
@@ -788,8 +780,6 @@ public class AuctionService {
             String sortBy,
             String direction
     ) {
-        // Να ενημερωθούν σωστά τα EXPIRED
-//        refreshExpiredAuctions();
 
         if (sortBy == null || sortBy.isBlank()) {
             sortBy = "endDate";
@@ -811,7 +801,6 @@ public class AuctionService {
 
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        // Τρέχων user
         UserEntity user = userEntityRepository.findByFirebaseId(getUserFirebaseId()).orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         LocalDateTime now = LocalDateTime.now();
@@ -836,11 +825,9 @@ public class AuctionService {
             String sortBy,
             String direction
     ) {
-        // Βρίσκουμε τον current user από Firebase
         String firebaseId = SecurityContextHolder.getContext().getAuthentication().getName();
         UserEntity user = userEntityRepository.findByFirebaseId(firebaseId).orElseThrow(()->new ResourceNotFoundException("User not found"));
 
-        // Default sorting: πιο πρόσφατα κερδισμένα πρώτα
         if (sortBy == null || sortBy.isBlank()) {
             sortBy = "endDate";
         }
@@ -862,14 +849,12 @@ public class AuctionService {
 
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        // Παίρνουμε όλα τα EXPIRED auctions όπου winner = αυτός ο user
         Page<Auction> pageAuctions = auctionRepository
                 .findByWinnerAndStatus(user, AuctionStatus.EXPIRED, pageable);
 
         userActivityService.saveUserActivityAsync(Endpoint.GET_MY_WON_AUCTIONS,"User: " + getUserFirebaseId() + " had requested to see the auctions he won");
 
 
-        // Για λίστα (λίγο data) χρησιμοποιούμε το list DTO
         return pageAuctions.map(this::toListDto);
     }
 
@@ -882,7 +867,6 @@ public class AuctionService {
             String sortBy,
             String direction
     ) {
-        // sorting defaults
         if (sortBy == null || sortBy.isBlank()) {
             sortBy = "endDate";       // π.χ. ταξινόμηση με βάση πότε τελειώνουν
         }
@@ -904,11 +888,9 @@ public class AuctionService {
 
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        // βρίσκουμε τον τωρινό χρήστη από το SecurityContext
         String firebaseId = SecurityContextHolder.getContext().getAuthentication().getName();
         UserEntity owner = userEntityRepository.findByFirebaseId(firebaseId).orElseThrow(()->new ResourceNotFoundException("User not found"));
 
-        // φέρνουμε όλες τις PENDING_APPROVAL για τον συγκεκριμένο owner
         Page<Auction> pendingPage = auctionRepository.findByStatusAndOwner(
                 AuctionStatus.PENDING_APPROVAL,
                 owner,
@@ -917,7 +899,6 @@ public class AuctionService {
         userActivityService.saveUserActivityAsync(Endpoint.GET_MY_PENDING_AUCTIONS,"User: " + getUserFirebaseId() + " had requested to see the auctions that are pending to be approved");
 
 
-        // επιστρέφουμε τα “λίστα” DTO (όχι full details)
         return pendingPage.map(this::toListDto);
     }
 
@@ -929,18 +910,15 @@ public class AuctionService {
             return false; // guest / χωρίς token
         }
 
-        // Αν θες στο μέλλον να περιορίσεις π.χ. μόνο BIDDER:
-        // return auth.getAuthorities().stream()
-        //         .anyMatch(a -> a.getAuthority().equals("ROLE_BIDDER"));
 
-        return true; // όποιος είναι authenticated με token μπορεί να κάνει bid
+        return true;
     }
 
 
     private boolean isCurrentUserEligibleForChat() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
-            return false; // guest → δεν μπορεί να γράψει στο chat
+            return false;
         }
 
         String firebaseId = auth.getName();
@@ -957,24 +935,20 @@ public class AuctionService {
     }
 
     private boolean isAuctionClosedForInteraction(Auction auction) {
-        // Αν ΔΕΝ είναι ACTIVE, τότε το θεωρούμε κλειστό για bid/chat
         if (auction.getStatus() != AuctionStatus.ACTIVE) {
             return true;
         }
 
-        // Αν έχει endDate στο παρελθόν → επίσης κλειστό
         LocalDateTime now = LocalDateTime.now();
         return auction.getEndDate() != null && auction.getEndDate().isBefore(now);
     }
 
     private boolean computeEligibleForChat(Auction auction) {
-        // Δεν έχει νόημα chat αν έχει λήξει
         if (auction.getEndDate() != null &&
                 auction.getEndDate().isBefore(LocalDateTime.now())) {
             return false;
         }
 
-        // Αν δεν είμαστε logged in -> όχι chat
         final String firebaseId;
         try {
             firebaseId = getUserFirebaseId();
@@ -992,15 +966,12 @@ public class AuctionService {
         UserEntity user = optUser.get();
         Long userId = user.getId();
 
-        // 1) Έχει κάνει bid σε ΑΥΤΗ τη δημοπρασία;
         boolean hasBidOnThisAuction =
                 bidRepository.existsByAuctionIdAndBidderId(auction.getId(), userId);
 
-        // 2) Έχει δημιουργήσει τουλάχιστον μία δημοπρασία;
         boolean hasCreatedAnyAuction =
                 auctionRepository.existsByOwner_Id(userId);
 
-        // 3) Έχει κερδίσει τουλάχιστον μία δημοπρασία;
         boolean hasWonAnyAuction =
                 auctionRepository.existsByWinner_Id(userId);
 
@@ -1019,13 +990,11 @@ public class AuctionService {
         Auction auction = auctionRepository.findById(auctionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Auction not found"));
 
-        // Δεν επιτρέπουμε edit σε EXPIRED ή CANCELLED
         if (auction.getStatus() == AuctionStatus.EXPIRED
                 || auction.getStatus() == AuctionStatus.CANCELLED) {
             throw new IllegalArgumentException("Cannot edit expired or cancelled auction");
         }
 
-        // Αν δώσει categoryId, την αλλάζουμε
         if (request.getCategoryId() != null) {
             Category category = categoryRepository.findById(request.getCategoryId())
                     .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
@@ -1069,12 +1038,6 @@ public class AuctionService {
         }
 
         Auction saved = auctionRepository.save(auction);
-
-        // Αν θέλεις log:
-         //userActivityService.saveUserActivityAsync(
-        //         Endpoint.UPDATE_AUCTION,
-        //         "Admin edited auction " + auctionId
-        // );
 
         return toDetailsDto(saved);
     }
@@ -1126,7 +1089,6 @@ public class AuctionService {
 
         switch (group) {
             case "ACTIVE" -> {
-                // Οι τρέχουσες ACTIVE δημοπρασίες του owner
                 pageAuctions = auctionRepository
                         .findByOwnerAndStatus(
                                 owner,
@@ -1144,7 +1106,6 @@ public class AuctionService {
                         );
             }
             case "CANCELLED" -> {
-                // Όλες οι CANCELLED δημοπρασίες του owner (χωρίς ημερομηνιακό φίλτρο)
                 pageAuctions = auctionRepository
                         .findByOwnerAndStatus(
                                 owner,
@@ -1152,7 +1113,6 @@ public class AuctionService {
                                 pageable
                         );
             }case "PENDING_APPROVAL" -> {
-                // Όλες οι PENDING APPROVAL δημοπρασίες του owner (χωρίς ημερομηνιακό φίλτρο)
                 pageAuctions = auctionRepository
                         .findByOwnerAndStatus(
                                 owner,
@@ -1163,7 +1123,6 @@ public class AuctionService {
             default -> throw new IllegalArgumentException("Invalid statusGroup: " + statusGroup);
         }
 
-        // logging activity (αν θες το κρατάς)
         userActivityService.saveUserActivityAsync(
                 Endpoint.GET_MY_AUCTIONS,
                 "User: " + firebaseId +
@@ -1188,7 +1147,6 @@ public class AuctionService {
 
             auctionRepository.save(auction);
 
-            // ✅ Notification στον owner (AFTER_COMMIT μέσω listener)
             Long ownerId = auction.getOwner().getId();
 
             String metadata = "{\"auctionId\":" + auction.getId()
@@ -1246,14 +1204,12 @@ public class AuctionService {
                         );
             }
             case "CANCELLED" -> {
-                // Όλες οι CANCELLED δημοπρασίες του owner (χωρίς ημερομηνιακό φίλτρο)
                 pageAuctions = auctionRepository
                         .findByStatus(
                                 AuctionStatus.CANCELLED,
                                 pageable
                         );
             }case "PENDING_APPROVAL" -> {
-                // Όλες οι PENDING APPROVAL δημοπρασίες του owner (χωρίς ημερομηνιακό φίλτρο)
                 pageAuctions = auctionRepository
                         .findByStatus(
                                 AuctionStatus.PENDING_APPROVAL,

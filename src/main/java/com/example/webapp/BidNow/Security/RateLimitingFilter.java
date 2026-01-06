@@ -14,14 +14,23 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+/**
+ * Rate limiting filter.
+ *
+ * Idea:
+ * - For authenticated requests we rate-limit per user (Firebase UID).
+ * - For anonymous requests we rate-limit per client IP.
+ *
+ *
+ * When a key exceeds the limit, we return HTTP 429 with a Retry-After header.
+ * We also send an alert email.
+ */
 @Component
 public class RateLimitingFilter extends OncePerRequestFilter {
 
-    private final EmailService emailService;
     private final RateLimiterService rateLimiter;
 
-    public RateLimitingFilter(EmailService emailService, RateLimiterService rateLimiter) {
-        this.emailService = emailService;
+    public RateLimitingFilter(RateLimiterService rateLimiter) {
         this.rateLimiter = rateLimiter;
     }
 
@@ -34,108 +43,37 @@ public class RateLimitingFilter extends OncePerRequestFilter {
 
         String path = request.getRequestURI();
 
-//        // Εξαιρέσεις (προσαρμόζεις όπως θες)
-//        if (isExcluded(path)) {
-//            chain.doFilter(request, response);
-//            return;
-//        }
 
+        // Find user's firebaseId
         String uid = resolveUid();
+
         boolean anonymous = (uid == null);
 
+        // Find user's ip
         String ip = resolveClientIp(request);
 
-        // Ομαδοποιούμε endpoints για να μην δημιουργούμε άπειρα keys (π.χ. /items/123)
-        String bucket = classifyBucket(path, request.getMethod());
-
-        int limit = resolveLimit(bucket, anonymous);
-
+        // If user is anonymous rate limit by ip else by uid
+        //todo: checking ip alone is dangerous. We also have to use an external rate limit provider.(e.g. through load balancer)
         String identity = anonymous ? ("ip:" + ip) : ("uid:" + uid);
-        String key = identity + "|bucket:" + bucket;
 
-        RateLimiterService.Decision decision = rateLimiter.check(key, limit);
+        RateLimiterService.Decision decision = rateLimiter.check(identity, request.getMethod(),uid,ip);
 
-        if (decision.type() != RateLimiterService.DecisionType.ALLOWED) {
-
-            if (decision.type() == RateLimiterService.DecisionType.BLOCKED_AND_ALERT) {
-                emailService.sendSimpleEmailAsync(
-                        "bidnowapp@gmail.com",
-                        "Rate limit abuse - temporarily blocked",
-                        "Blocked key: " + key +
-                                "\npath: " + path +
-                                "\nmethod: " + request.getMethod() +
-                                "\nuid: " + (uid == null ? "-" : uid) +
-                                "\nip: " + ip +
-                                "\nretryAfterSeconds: " + decision.retryAfterSeconds()
-                );
-            }
+        if (decision.type() == RateLimiterService.DecisionType.BLOCKED) {
 
             response.setStatus(429);
             response.setContentType("application/json");
-            response.setHeader("Retry-After", String.valueOf(decision.retryAfterSeconds()));
+            response.setHeader("Retry-After", String.valueOf(decision.retryAfterMinutes()));
             response.getWriter().write(
                     "{\"error\":\"Too many requests. Please try again later.\"," +
-                            "\"retryAfterSeconds\":" + decision.retryAfterSeconds() + "}"
+                            "\"retryAfterMinutes\":" + decision.retryAfterMinutes() + "}"
             );
             return;
         }
 
         chain.doFilter(request, response);
+
     }
 
-//    private boolean isExcluded(String path) {
-//        return path.startsWith("/swagger")
-//                || path.startsWith("/v3/api-docs")
-//                || path.startsWith("/h2-console")
-//                || path.startsWith("/actuator/health");
-//    }
-
-    /**
-     * Bucket classification: βάλε εδώ τα δικά σου patterns.
-     * Στόχος: λίγες “ομάδες”, όχι unique path κάθε φορά.
-     */
-    private String classifyBucket(String path, String method) {
-
-        // AUTH endpoints (anonymous)
-        if (path.startsWith("/api/auth/login")) return "AUTH_LOGIN";
-        if (path.startsWith("/api/auth/username-availability")) return "AUTH_USERNAME_AVAIL";
-        if (path.startsWith("/api/auth/user-availability")) return "AUTH_USER_AVAIL";
-
-        // AUCTIONS (anonymous)
-        // /auctions και /auctions/{id}
-        // Προσοχή: /auctions/123 -> AUCTIONS_ITEM, όχι unique key per id
-        if (path.equals("/auctions")) return "AUCTIONS_LIST";
-        if (path.startsWith("/auctions/")) return "AUCTIONS_ITEM";
-
-        // default buckets (ανά method)
-        return "GENERAL_" + method;
-    }
-
-
-    /**
-     * Εδώ ορίζεις τα limits.
-     * Anonymous: πιο αυστηρά σε login/register/contact.
-     */
-    private int resolveLimit(String bucket, boolean anonymous) {
-        if (anonymous) {
-            return switch (bucket) {
-                case "AUTH_LOGIN" -> 20;              // 10/min ανά IP
-                case "AUTH_USERNAME_AVAIL" -> 50;     // 20/min ανά IP (anti-enumeration)
-                case "AUTH_USER_AVAIL" -> 50;         // 20/min ανά IP
-
-                case "AUCTIONS_LIST" -> 90;           // 60/min ανά IP (λίστα)
-                case "AUCTIONS_ITEM" -> 90;          // 120/min ανά IP (views σε auction)
-
-                default -> 90;                        // γενικό anonymous fallback
-            };
-        }
-
-        // Authenticated users (συνήθως πιο χαλαρά)
-        return switch (bucket) {
-            case "AUTH_LOGIN", "AUTH_USERNAME_AVAIL", "AUTH_USER_AVAIL" -> 60;
-            default -> 240; // π.χ. 240/min ανά uid
-        };
-    }
 
 
     private String resolveUid() {

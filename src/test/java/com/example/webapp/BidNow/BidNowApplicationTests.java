@@ -10,6 +10,7 @@ class BidNowApplicationTests {
 
 	@Test
 	void contextLoads() {
+
 	}
 
 }

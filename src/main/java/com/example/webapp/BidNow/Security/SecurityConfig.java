@@ -18,10 +18,19 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.List;
 
 /**
- * @Author Kendeas
+ *
+ * Security configuration file
+ *
+ * - Assigns the order of filters:
+ *  1) Authentication filter
+ *  2) Rate limiting filter
+ *  todo: 3)xss sanitization filter
+ *
+ * - Stateless API (no server sessions) using Bearer JWT (Firebase ID token).
+ *
  */
 @Configuration
-@EnableMethodSecurity // για @PreAuthorize κ.λπ.
+@EnableMethodSecurity // Enable @PreAuthorize,@PostAuthorize etc..
 public class SecurityConfig {
 
     @Bean
@@ -29,10 +38,14 @@ public class SecurityConfig {
                                            FirebaseAuthenticationFilter firebaseFilter,
                                            RateLimitingFilter rateLimitingFilter) throws Exception {
          http
-                 .cors(Customizer.withDefaults())   // ✅ ενεργοποίηση CORS /// NEW
+                 // Enable CORS using the CorsConfigurationSource bean below
+                 .cors(Customizer.withDefaults())
+                 // Stateless REST API: disable CSRF (we are not using cookies-based sessions for auth)
                  .csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(reg -> reg
+                 // No HTTP Session created/used by Spring Security
+                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                 // Developer / tooling endpoints (Remove all except last 3 before production)
+                 .authorizeHttpRequests(reg -> reg
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
@@ -42,28 +55,28 @@ public class SecurityConfig {
                                 "/webjars/**",
                                 "/h2-console",
                                 "/h2-console/**",
-                                "/api/auth/username-availability**",   // 👈 FIXED
-                                "/api/auth/username-availability",   // 👈 FIXED
+                                // Public auth helper endpoints
+                                "/api/auth/username-availability**",
+                                "/api/auth/username-availability",
                                 "/api/auth/user-availability"
                         ).permitAll()
-                        //άφησε το websocket handshake ελεύθερο
+                         // WebSocket handshake endpoint (this endpoint is invoked inside rest apis)
                         .requestMatchers("/ws", "/ws/**").permitAll()
-                        // Auth endpoints public
-                        // 👇 ΔΩΡΕΑΝ πρόσβαση για ΟΛΑ τα GET στο /auctions...
+                         // Public read-only endpoints (browse auctions without login)
                         .requestMatchers(HttpMethod.GET, "/auctions/**").permitAll()
-                        //Δωνεαν πρόσβαση στις κατηγοριες
+                         // Public categories endpoint
                         .requestMatchers("/api/categories/**").permitAll()
-//                        .requestMatchers("/Auth/**").permitAll()
-                        .anyRequest().authenticated())
-                .httpBasic(AbstractHttpConfigurer::disable)// maybe remove
+                         .anyRequest().authenticated())
+                 // Disable default auth mechanisms we don't use
+                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)// maybe remove
-                 // 1) Πρώτα XSS sanitization
-//               .addFilterBefore(xssFilter, FirebaseAuthenticationFilter.class)// maybe remove
-                 // 2) Μετά Firebase auth (βάζει uid στο SecurityContext)
+                // todo: .addFilterBefore(xssFilter, FirebaseAuthenticationFilter.class)
+                 // Firebase auth filter (authenticates and puts uid in SecurityContext)
                  .addFilterBefore(firebaseFilter, UsernamePasswordAuthenticationFilter.class)
-        // 3) Μετά rate limiting per user (ή IP)
+        // Rate limiting filter per user
                 .addFilterAfter(rateLimitingFilter, FirebaseAuthenticationFilter.class);
-        // ✅ Εδώ είναι ξεχωριστή εντολή, ΟΧΙ μέσα στην αλυσίδα:
+        // Allow H2 console to render in a browser frame (local/dev convenience)
+        // todo: remove this before prod
         http.headers(headers -> headers.frameOptions(frame -> frame.disable()));
 
         return http.build();
@@ -72,10 +85,16 @@ public class SecurityConfig {
     }
 
 
+    /**
+     * CORS configuration for the frontend .
+     * - Allows the Vite dev server origin.
+     * - Allows common HTTP methods.
+     * - Allows credentials (cookies/authorization headers) if needed.
+     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:5173"));
+        config.setAllowedOrigins(List.of("http://localhost:5173"));// Allow requests only that comes only from this url, and from this port
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

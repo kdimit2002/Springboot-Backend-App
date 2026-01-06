@@ -18,14 +18,14 @@ import java.time.Duration;
 public class RateLimitCacheConfig {
 
     /**
-     * Keep a user in cache for 15 minutes
+     * Keep a user in cache for 5 minutes
      * from the previous request
      *
      */
     @Bean("rateLimitStateCache")
     public Cache<String, RateLimitState> rateLimitStateCache() {
         return Caffeine.newBuilder()
-                .expireAfterAccess(Duration.ofMinutes(15)) // κρατά state για active keys
+                .expireAfterAccess(Duration.ofMinutes(5)) //
                 .maximumSize(100_000)
                 .recordStats()
                 .build();
@@ -33,28 +33,14 @@ public class RateLimitCacheConfig {
 
     /**
      *  Keep user that is banned in cache for
-     *  2 hours in order to cut his connection with
+     *  1 hour in order to cut his connection with
      *  the app server
      *
      */
     @Bean("rateLimitBanCache")
     public Cache<String, Long> rateLimitBanCache() {
         return Caffeine.newBuilder()
-                .expireAfterWrite(Duration.ofHours(2)) // safety cleanup
-                .maximumSize(100_000)
-                .build();
-    }
-
-    /**
-     * After we send an email alert of
-     * rate limit violation we write to this
-     * cache in order to avoid email spamming
-     * @return
-     */
-    @Bean("rateLimitAlertCooldownCache")
-    public Cache<String, Boolean> rateLimitAlertCooldownCache() {
-        return Caffeine.newBuilder()
-                .expireAfterWrite(Duration.ofMinutes(10)) // 1 alert / 10'
+                .expireAfterWrite(Duration.ofHours(1).plusMinutes(10)) // Keep users banned for 1 hour.
                 .maximumSize(100_000)
                 .build();
     }

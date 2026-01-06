@@ -9,7 +9,10 @@ import lombok.NoArgsConstructor;
 import java.util.Collection;
 
 /**
- * @Author Kendeas
+ * Possible roles are:
+ *  - Admin
+ *  - Auctioneer
+ *  - Bidder
  */
 @Entity
 @NoArgsConstructor

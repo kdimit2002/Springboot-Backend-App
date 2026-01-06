@@ -2,7 +2,7 @@ package com.example.webapp.BidNow.Enums;
 
 
 
-//Todo: To frondend tha kali apo CDN tin fotigrafia meso tou url pou stelni i basi dedomenon!
+//Todo: Use Cloudflare CDN
 
 
 public enum Avatar {

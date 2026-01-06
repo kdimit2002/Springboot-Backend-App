@@ -19,6 +19,15 @@ import java.util.List;
 
 import static com.example.webapp.BidNow.helpers.UserEntityHelper.getUserFirebaseId;
 
+/**
+ * ImageService
+ *
+ * Uploads auction images with basic validation:
+ * - Only the auction owner can upload photos.
+ * - Max 8 images per auction.
+ * - Reads image dimensions (width/height) for metadata.
+ * - Uploads files to R2 using retry logic, then attaches Image entities to the auction.
+ */
 @Service
 public class ImageService {
 
@@ -32,20 +41,17 @@ public class ImageService {
     }
 
     @Transactional
-    public List<Image> uploadAuctionPhotos(Long auctionId,
-                                           List<MultipartFile> files) {
+    public List<Image> uploadAuctionPhotos(Long auctionId, List<MultipartFile> files) {
 
-        // Ο χρήστης πρέπει να είναι owner αυτής της auction
+        // Only the owner of the auction can upload images.
         Auction auction = auctionRepository
                 .findByIdAndOwnerFirebaseId(auctionId, getUserFirebaseId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 
+        // max 8 images per auction.
         int existing = auction.getAuctionImages().size();
         if (existing + files.size() > 8) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Cannot upload more than 8 images"
-            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot upload more than 8 images");
         }
 
         int baseOrder = existing + 1;
@@ -53,30 +59,22 @@ public class ImageService {
 
         for (int i = 0; i < files.size(); i++) {
             MultipartFile file = files.get(i);
-
             int sortOrder = baseOrder + i;
 
-            // 1) Διαβάζουμε διαστάσεις εικόνας (τοπικό I/O)
+            // Read image dimensions (metadata) and reject invalid image files.
             int w, h;
             try (InputStream in = file.getInputStream()) {
                 BufferedImage img = ImageIO.read(in);
-                if (img == null) {
-                    throw new ResponseStatusException(
-                            HttpStatus.BAD_REQUEST,
-                            "Invalid image file"
-                    );
+                if (img == null) { // todo: maybe check for malicious files
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid image file");
                 }
                 w = img.getWidth();
                 h = img.getHeight();
             } catch (IOException e) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Failed to read image file",
-                        e
-                );
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Failed to read image file", e);
             }
 
-            // 2) Upload στο R2 ΜΕ retry λογική
+            // Upload to R2 (with retry) and get back a public URL.
             String url = r2RetryService.uploadImageWithRetry(
                     file,
                     auctionId,
@@ -84,7 +82,7 @@ public class ImageService {
                     getUserFirebaseId()
             );
 
-            // 3) Δημιουργία Image entity και σύνδεση με auction
+            // Create Image entity and attach it to the auction.
             Image image = new Image();
             image.setAuction(auction);
             image.setUrl(url);
@@ -98,7 +96,6 @@ public class ImageService {
             saved.add(image);
         }
 
-        // @Transactional + cascade = ALL → το auction.save θα γίνει αυτόματα
         return saved;
     }
 

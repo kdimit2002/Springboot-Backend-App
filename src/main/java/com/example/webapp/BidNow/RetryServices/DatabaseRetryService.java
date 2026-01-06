@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-public class DatabaseRetryService {
+public class DatabaseRetryService { //TODO: Remove this in future
 
     public static final Logger log = LoggerFactory.getLogger(DatabaseRetryService.class);
 
@@ -77,42 +77,6 @@ public class DatabaseRetryService {
 
         throw new DatabaseException("User couldn't be deleted due to connection issues. Please try again: " + e.getMessage());
     }
-
-
-
-
-
-//
-//
-//    @Retryable(recover = "notifyUserNotRetrievedScheduler",
-//            retryFor = {
-//                    TransientDataAccessException.class, // Spring translated
-//                    JDBCConnectionException.class,       // Hibernate raw
-//                    CannotGetJdbcConnectionException.class
-//            },
-//            maxAttempts = 3,
-//            backoff = @Backoff(delay = 500, multiplier = 2)
-//    )
-//    @Transactional(propagation = Propagation.REQUIRES_NEW)
-//    public boolean deleteUserFromDatabaseScheduler(String firebaseId){
-//        log.warn("Attempting to delete Firebase user {} from scheduler", firebaseId);
-//
-//
-//        int row = userEntityRepository.deleteByFirebaseId(firebaseId);
-//
-//
-//        log.info("Successfully deleted Firebase user {} from scheduler", firebaseId);
-//
-//        return row > 0;
-//    }
-//
-//    @Recover
-//    public boolean recoverFromDatabaseDeleteFailureScheduler(Exception e, String firebaseId) {
-//        log.error("Could not delete user {} from database after retries in scheduler. Will mark as cleanup-needed. Reason: {}",
-//                firebaseId, e.getMessage());
-//
-//        return false;
-//    }
 
 
 

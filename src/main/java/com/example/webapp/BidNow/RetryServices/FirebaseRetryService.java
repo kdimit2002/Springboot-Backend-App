@@ -23,7 +23,9 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * @Author Kendeas
+ * Retry service for firebase authentication external api/
+ * Retry service is used for consistency between the application's database
+ * on connectivity and transient errors
  */
 @Service
 public class FirebaseRetryService {
@@ -41,23 +43,29 @@ public class FirebaseRetryService {
 
 
     // ToDo: async retry??
+
+    /**
+     *
+     * Assigns custom claims to a Firebase user.
+     * After 5 failed tries, the flow goes to the recover method: notifyClaimsNotLoaded().
+     *
+     */
     @Retryable(recover = "notifyClaimsNotLoaded",
             retryFor = {FirebaseAuthException.class,
             ResourceAccessException.class, ConnectException.class, SocketTimeoutException.class},          // ποιες εξαιρέσεις retry
-            maxAttempts = 5,                  // πόσες φορές
+            maxAttempts = 5,  // retry 5 times
             backoff = @Backoff(delay = 500, multiplier = 2) // 1s, 2s, 4s, 8s...
     )
     public void setFirebaseClaims(String firebaseId, Map<String,Object> claims) throws FirebaseAuthException {
         log.warn("Attempting to store Firebase user claims {}", firebaseId);
-
         try{
             firebaseAuth.setCustomUserClaims(firebaseId,claims);
         }  catch (Exception e) {
             emailService.sendSimpleEmailAsync("bidnowApp@gmail.com",
-                    "User could not had his claims assigned in firebase",
-                    "User with firebase id: " + firebaseId+ " was attempted to has his claims assigned but couldn't assign them");
+                    "User's claims weren't assigned in firebase",
+                    "User with firebase id: " + firebaseId+ " could not have his claims assigned");
             log.error("Unexpected error while setting claims for Firebase user {}", firebaseId, e);
-            throw new RuntimeException("Unexpected error setting Firebase claims", e);
+            throw new RuntimeException("Unexpected error setting user's Firebase claims", e);
         }
 
         log.info("Successfully stored Firebase user claims {}", firebaseId);
@@ -66,6 +74,10 @@ public class FirebaseRetryService {
     }
 
 
+    /**
+     * Recovery method.
+     * Triggered after 5 failed attempts to assign Firebase claims.
+     */
     @Recover
     public void notifyClaimsNotLoaded(FirebaseAuthException e,String firebaseId, Map<String,Object> claims) {
         log.error("User {} couldn't have his roles assigned to firebase, or maybe assigned but firebase couldn't verify. THERE IS A USER NOW IN FIREBASE DATABASE WITHOUT CLAIMS: {}", firebaseId, e.getMessage(),e);
@@ -79,62 +91,51 @@ public class FirebaseRetryService {
 
 
 
+    // ToDo: @Async if needed but need to use another bean @Service because retryable cannot be used concurrently with async in the same bean
 
-    // ToDo: Check if exception firebaseauthexception.class gets all exceptions possible
-    // ToDo: @Async if needed but need to use another bean @Service because retryable cannot be used concurently with async in same proxy bean
+    /**
+     * Delete user from Firebase and revoke his refresh token.
+     * After 5 failed tries, the flow goes to the recover method: notifyUserNotDeleted().
+     *
+     */
     @Retryable(recover = "notifyUserNotDeleted",
             retryFor = {FirebaseAuthException.class,
-                    ResourceAccessException.class, ConnectException.class, SocketTimeoutException.class},           // ποιες εξαιρέσεις retry
-            maxAttempts = 5,                  // πόσες φορές
+                    ResourceAccessException.class, ConnectException.class, SocketTimeoutException.class},
+            maxAttempts = 5,
             backoff = @Backoff(delay = 500, multiplier = 2) // 1s, 2s, 4s, 8s...
     )
-    public void deleteUserFromFirebase(String firebaseId) throws FirebaseAuthException{
-        log.warn("Attempting to delete Firebase user {}", firebaseId);
-
-        try {
-            log.warn("Attempting to delete Firebase user {}", firebaseId);
-
-            firebaseAuth.revokeRefreshTokens(firebaseId);
-            firebaseAuth.deleteUser(firebaseId);
-
-            log.info("Successfully deleted Firebase user {}", firebaseId);
-        } catch (Exception e) {
-            emailService.sendSimpleEmailAsync("bidnowApp@gmail.com",
-                    "User was couldn't be deleted from firebase",
-                    "User with firebase id: " + firebaseId+ " was attempted to be deleted but couldn't be");
-            log.error("Unexpected exception while deleting Firebase user {}", firebaseId, e);
-            throw new RuntimeException("Unexpected error deleting Firebase user", e);
-        }
-
-        log.info("Successfully deleted Firebase user {}", firebaseId);
+    public boolean  deleteUserFromFirebase(String firebaseId) throws FirebaseAuthException{
+        firebaseAuth.revokeRefreshTokens(firebaseId);
+        firebaseAuth.deleteUser(firebaseId);
+        return true;
     }
 
-
+    /**
+     * Recovery method.
+     * Triggered after 5 failed attempts to delete user from firebase.
+     */
     @Recover
-    public void notifyUserNotDeleted(FirebaseAuthException e,String firebaseId){
-        try {
-            firebaseAuth.getUser(firebaseId);
-        } catch (FirebaseAuthException ex) {
-                // Ο χρήστης είναι ήδη διαγραμμένος
-                throw new ResourceNotFoundException("User wasn't found "+ ex.getMessage());
-        }
-        log.error("User {} couldn't be deleted from firebase, or maybe deleted but firebase couldn't verify. THERE IS A USER NOW IN FIREBASE DATABASE NOT AUTHORIZED: {}", firebaseId, e.getMessage(),e);
+    public boolean  notifyUserNotDeleted(FirebaseAuthException e,String firebaseId){
+        log.error("Failed to delete Firebase user {} after retries: {}", firebaseId, e.getMessage(), e);
+
         emailService.sendSimpleEmailAsync(
                 "bidnowapp@gmail.com",
-                "User " + firebaseId + " couldn't be deleted from firebase",
-                "User with Firebase ID: " + firebaseId +
-                        " attempted to be deleted but firebase couldn't delete him or deleted him but couldn't notify us.\n" +
-                        "Action: User is trying to be deleted from Firebase."
+                "User couldn't be deleted from Firebase",
+                "FirebaseId: " + firebaseId + "\nCause: " + e.getClass().getSimpleName() + " - " + e.getMessage()
         );
-        throw new FirebaseConnectionException("User couldn't be deleted " + e.getMessage(),e);
+
+        return false;
 
     }
 
 
 
 
-
-
+    /**
+     * Fetch user from Firebase.
+     * After 5 failed tries, the flow goes to the recover method: notifyUserNotRetrieved().
+     *
+     */
     @Retryable(recover = "notifyUserNotRetrieved",
             retryFor = {FirebaseAuthException.class,
                     ResourceAccessException.class, ConnectException.class, SocketTimeoutException.class},            // ποιες εξαιρέσεις retry
@@ -160,6 +161,10 @@ public class FirebaseRetryService {
         return userRecord;
     }
 
+    /**
+     * Recovery method.
+     * Triggered after 5 failed attempts to fetch user from firebase.
+     */
     @Recover
     public UserRecord notifyUserNotRetrieved(FirebaseAuthException e, String firebaseId){
         log.error("User {} couldn't be retrieved from firebase: {}", firebaseId, e.getMessage(),e);

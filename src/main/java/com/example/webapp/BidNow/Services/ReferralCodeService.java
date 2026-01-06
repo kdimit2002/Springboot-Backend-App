@@ -1,6 +1,5 @@
 package com.example.webapp.BidNow.Services;
 
-import com.example.webapp.BidNow.Controllers.ReferralCodeController;
 import com.example.webapp.BidNow.Dtos.ReferralCodeUsageResponse;
 import com.example.webapp.BidNow.Dtos.ReferralCodeUserResponse;
 import com.example.webapp.BidNow.Entities.ReferralCode;
@@ -20,6 +19,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import static com.example.webapp.BidNow.helpers.UserEntityHelper.getUserFirebaseId;
 
+/**
+ * ReferralCodeService
+ *
+ */
 @Service
 public class ReferralCodeService {
 
@@ -30,16 +33,20 @@ public class ReferralCodeService {
     private final ReferralCodeRepository referralCodeRepository;
     private final UserEntityRepository userEntityRepository;
     private final ReferralCodeUsageRepository referralCodeUsageRepository;
-    private final EmailService emailService;
 
-    public ReferralCodeService(UserActivityService userActivityService, ReferralCodeRepository referralCodeRepository, UserEntityRepository userEntityRepository, ReferralCodeUsageRepository referralCodeUsageRepository, EmailService emailService) {
+    public ReferralCodeService(UserActivityService userActivityService, ReferralCodeRepository referralCodeRepository, UserEntityRepository userEntityRepository, ReferralCodeUsageRepository referralCodeUsageRepository) {
         this.userActivityService = userActivityService;
         this.referralCodeRepository = referralCodeRepository;
         this.userEntityRepository = userEntityRepository;
         this.referralCodeUsageRepository = referralCodeUsageRepository;
-        this.emailService = emailService;
     }
 
+    /**
+     * Applies a referral code for the current user.
+     *
+     * @param code, string sequence that a user used and is compared with the existing referral codes
+     * @return
+     */
     @Transactional
     public String useReferralCode(String code) {
 
@@ -54,44 +61,54 @@ public class ReferralCodeService {
         }
 
 
-        // Έλεγχος maxUses
+        // Check if referral code exceeded its max number of uses
         if (referralCode.getMaxUses() > 0 &&
                 referralCode.getUsesSoFar() >= referralCode.getMaxUses()) {
             throw new IllegalStateException("Referral code has reached max uses");
         }
 
-        // Να μην μπορεί να βάλει τον δικό του code
+        // User cannot use his own referral code
         if (referralCodeRepository.existsByOwner(user)) {
             throw new IllegalArgumentException("You are a referral code owner you cannot use any referral code");
         }
 
-        // Έλεγχος αν το έχει ξαναχρησιμοποιήσει
+        // check if user already used his referral code
         if (referralCodeUsageRepository.existsByUser_FirebaseId(user.getFirebaseId())) {
             throw new IllegalArgumentException("You have already received a referral reward.");
         }
 
-        // ✅ ΕΔΩ δημιουργείται το Usage
+        // create referral code usage
         ReferralCodeUsage usage = new ReferralCodeUsage(user, referralCode);
         referralCodeUsageRepository.save(usage);
 
-        // ✅ Αυξάνεται το counter
+        // increment uses so far of the referral code
         referralCode.setUsesSoFar(referralCode.getUsesSoFar() + 1);
 
-        // ✅ Εδώ μπορείς να δώσεις reward points
+        // Give the rewards to owner and user if referral code (points are applied when referral code was created from admin)
         Long points = referralCode.getRewardPoints();
         userEntityRepository.incrementPoints(user.getId(), referralCode.getRewardPoints());
         userEntityRepository.incrementPoints(referralCode.getOwner().getId(), referralCode.getOwnerRewardPoints());
 
+        //log
         userActivityService.saveUserActivityAsync(Endpoint.USE_REFERRAL_CODE, "User: " + getUserFirebaseId() +
                 " just used referral code: " + referralCode.getCode()
                 + " of user " + referralCode.getOwner() + " and gained " +
                 referralCode.getRewardPoints() + " points. Creator gained " + referralCode.getOwnerRewardPoints() + " points");
 
 
-        //log
         return "Referral code has been created, You earned " + points + " points!";
     }
 
+    /**
+     * Show referral code owner's about the usage of his code
+     *
+     * Notes:
+     *  - Only referral code owners can view this info
+     *
+     * @param page
+     * @param size
+     * @return
+     */
     @Transactional(readOnly = true)
     public Page<ReferralCodeUsageResponse> referralCodeUsage(int page, int size) {
 
@@ -110,7 +127,7 @@ public class ReferralCodeService {
                         pageable
                 );
 
-        // map από entity -> DTO
+        // map from entity to DTO
         return usagesPage.map(usage -> {
 
             return new ReferralCodeUsageResponse(
@@ -120,6 +137,11 @@ public class ReferralCodeService {
         });
     }
 
+    /**
+     * Return dto response with the code of the referral code if the
+     * user is a referral code owner
+     * @return dto with the code of the referral code
+     */
     @Transactional(readOnly = true)
     public ReferralCodeUserResponse isReferralCodeUser() {
         ReferralCode referralCode = referralCodeRepository.findByOwner_FirebaseId(getUserFirebaseId())
@@ -130,67 +152,5 @@ public class ReferralCodeService {
 
     }
 
-
-//    @Transactional(readOnly = true)
-//    // Μέσα στο service σου
-//    public ReferralCodeCreatorMonthlyAmount getReferralCodeCreatorMonthlyAmount() {
-//
-//        if(!referralCodeRepository.existsByCreator_FirebaseId(getUserFirebaseId()))
-//            throw new IllegalArgumentException("You are not a referral creator");
-//
-//        List<ReferralCodeUsage> usages =
-//                referralCodeUsageRepository.findByReferralCode_Creator_FirebaseId(getUserFirebaseId());
-//
-//        // Τελευταίοι 5 μήνες: από (now - 4 μήνες) μέχρι now
-//        YearMonth end = YearMonth.now();
-//        YearMonth start = end.minusMonths(4);   // σύνολο 5 μήνες
-//
-//        // Ένα LinkedHashMap για να κρατάμε τη σειρά: start -> ... -> end
-//        Map<YearMonth, BigDecimal> monthTotals = new LinkedHashMap<>();
-//
-//        YearMonth cursor = start;
-//        while (!cursor.isAfter(end)) {
-//            monthTotals.put(cursor, BigDecimal.ZERO);
-//            cursor = cursor.plusMonths(1);
-//        }
-//
-//        // Γεμίζουμε τα ποσά
-//        for (ReferralCodeUsage usage : usages) {
-//            LocalDateTime usedAt = usage.getUsedAt();
-//            if (usedAt == null) {
-//                continue;
-//            }
-//
-//            YearMonth usageMonth = YearMonth.from(usedAt);
-//
-//            // Αν το usage είναι μεταξύ start και end (inclusive)
-//            if (!usageMonth.isBefore(start) && !usageMonth.isAfter(end)) {
-//                BigDecimal current = monthTotals.getOrDefault(usageMonth, BigDecimal.ZERO);
-//                BigDecimal creatorAmount = usage.getCreatorAmount() != null
-//                        ? usage.getCreatorAmount()
-//                        : BigDecimal.ZERO;
-//
-//                BigDecimal updated = current.add(creatorAmount);
-//                monthTotals.put(usageMonth, updated);
-//            }
-//        }
-//
-//        // Μετατρέπουμε σε DTO objects
-//        List<MonthlyAmount> monthlyAmounts = monthTotals.entrySet().stream()
-//                .map(entry -> {
-//                    YearMonth ym = entry.getKey();
-//                    BigDecimal amount = entry.getValue();
-//                    Month monthEnum = ym.getMonth();
-//                    return new MonthlyAmount(
-//                            ym.getYear(),
-//                            ym.getMonthValue(),
-//                            monthEnum.name(),  // ή με Locale αν θες ελληνικά
-//                            amount
-//                    );
-//                })
-//                .collect(Collectors.toList());
-//
-//        return new ReferralCodeCreatorMonthlyAmount(monthlyAmounts);
-//    }
 
 }

@@ -6,13 +6,24 @@ import com.example.webapp.BidNow.Repositories.UserEntityRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+
+/**
+ * DisableUserService
+ *
+ * Notes:
+ *  - Called by nightly consistency scheduler
+ *  - Handles "anonymization" of a user inside the database.
+ *   - This is typically used when an admin deletes an account or user wants to delete his account
+ *     while keeping historical data (auctions, bids, messages) but removing personally identifiable info.
+ *
+ */
 @Service
-public class DisableUserService {
+public class AnonymizeUserService {
 
     private final AdminUserEntityService adminUserEntityService;
     private final UserEntityRepository userEntityRepository;
 
-    public DisableUserService(AdminUserEntityService adminUserEntityService, UserEntityRepository userEntityRepository) {
+    public AnonymizeUserService(AdminUserEntityService adminUserEntityService, UserEntityRepository userEntityRepository) {
         this.adminUserEntityService = adminUserEntityService;
         this.userEntityRepository = userEntityRepository;
     }

@@ -18,6 +18,12 @@ import java.io.IOException;
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 
+/**
+ * Retry service for cloudflare external R2 object storage
+ * Retry service is used for consistency between the application's database
+ * on connectivity and transient errors
+ *
+ */
 @Service
 public class R2RetryService {
 
@@ -33,12 +39,8 @@ public class R2RetryService {
     }
 
     /**
-     * Upload εικόνας στο R2 με retry.
+     * Upload image to R2 with retry.
      *
-     * Retry για:
-     *  - network errors
-     *  - S3/R2 exceptions
-     *  - I/O errors (wrapped σε R2StorageException)
      */
     @Retryable(
             recover = "recoverUploadImage",
@@ -66,14 +68,13 @@ public class R2RetryService {
 
             return url;
         } catch (IOException e) {
-            // Μετατρέπουμε το checked IOException σε unchecked R2StorageException
-            // ώστε να ενεργοποιηθεί το @Retryable
             throw new R2StorageException("I/O error while uploading image to R2", e);
         }
     }
 
     /**
-     * Εκτελείται ΜΟΝΟ όταν εξαντληθούν όλα τα retries και πάλι αποτύχει.
+     * Recovery method.
+     * Triggered after 5 failed attempts to upload image to R2.
      */
     @Recover
     public String recoverUploadImage(Exception e,
@@ -85,8 +86,8 @@ public class R2RetryService {
         log.error("Failed to upload image to R2 after retries. auctionId={}, owner={}, index={}, error={}",
                 auctionId, ownerFirebaseUid, imageIndex, e.getMessage(), e);
 
-        // Προαιρετικά: ενημέρωση admin
-        emailService.sendSimpleEmailAsync(
+        // Inform admin
+        emailService.sendSimpleEmailAsync( // Informational email to BidNow if something went wrong
                 "bidnowapp@gmail.com",
                 "R2 image upload failed",
                 """
@@ -100,7 +101,6 @@ public class R2RetryService {
                 """.formatted(auctionId, ownerFirebaseUid, imageIndex, e.getMessage())
         );
 
-        // Τελική εξαίρεση που θα φτάσει μέχρι τον controller (και στο GlobalExceptionHandler)
         throw new R2StorageException("Failed to upload image to R2 after retries", e);
     }
 }

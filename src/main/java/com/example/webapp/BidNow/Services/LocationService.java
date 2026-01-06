@@ -12,27 +12,26 @@ import org.springframework.transaction.annotation.Transactional;
 
 import static com.example.webapp.BidNow.helpers.UserEntityHelper.getUserFirebaseId;
 
-
+/**
+ * LocationService
+ *
+ * Manages a user's location info (read + update) and maps it to/from LocationDto.
+ */
 @Service
 public class LocationService {
 
-
-    private final UserActivityService userActivityService;
     private final UserEntityRepository userEntityRepository;
     private final LocationRepository locationRepository;
 
-
-    public LocationService(UserActivityService userActivityService, UserEntityRepository userEntityRepository, LocationRepository locationRepository) {
-        this.userActivityService = userActivityService;
+    public LocationService(UserEntityRepository userEntityRepository,
+                           LocationRepository locationRepository) {
         this.userEntityRepository = userEntityRepository;
         this.locationRepository = locationRepository;
     }
 
-
-
     @Transactional(readOnly = true)
-    public LocationDto getUserLocation(String firebaseId) {
-
+    public LocationDto getUserLocation(String firebaseId) { // Used in setting up auctions location ( auction's location is same as it's owner)
+        // Load user and return their stored location as DTO.
         UserEntity user = userEntityRepository.findByFirebaseId(firebaseId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
@@ -47,14 +46,17 @@ public class LocationService {
         );
     }
 
-
-
+    /**
+     * User can update his location details
+     *
+     * @param firebaseId
+     * @param dto
+     */
     @Transactional
-    public void updateUserLocation(String firebaseId,LocationDto dto) {
-
+    public void updateUserLocation(String firebaseId, LocationDto dto) {
+        // Load user, update location fields, and persist changes.
         UserEntity user = userEntityRepository.findByFirebaseId(firebaseId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
 
         Location location = user.getLocation();
 
@@ -63,8 +65,7 @@ public class LocationService {
         location.setCity(dto.city());
         location.setAddressLine(dto.addressLine());
         location.setPostalCode(dto.postalCode());
+
         locationRepository.save(location);
     }
-
-
 }

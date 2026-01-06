@@ -42,12 +42,24 @@ public class AuctionWinnerExpiredScheduler {
     }
 
 
-    @Scheduled(fixedDelay = 100_000)
+    /**
+     * Runs repeatedly (every 80 seconds).
+     * Finds ACTIVE auctions that already ended and marks them as EXPIRED.
+     *
+     * Then:
+     * - If there are no bids: notify the owner that the auction ended with no bids.
+     * - If there is a winner: set winner, enable chat for winner/owner,
+     *   send notifications (won/lost/owner) and send emails (winner + owner).
+     *
+     * Uses @Transactional because we update auction fields (status, winner, flags).
+     */
+    @Scheduled(fixedDelay = 80_000)
     @Transactional
     public void markExpiredAuctionsAndNotifyWinners() {
 
         LocalDateTime now = LocalDateTime.now();
 
+        // Find auctions that expired
         List<Auction> toExpire =
                 auctionRepository.findByStatusAndEndDateBefore(AuctionStatus.ACTIVE, now);
 
@@ -59,10 +71,10 @@ public class AuctionWinnerExpiredScheduler {
 
             log.info("Expiring auction id={} title='{}'", auction.getId(), auction.getTitle());
 
-            // 1) EXPIRED
+            // 1) Set auction EXPIRED
             auction.setStatus(AuctionStatus.EXPIRED);
 
-            // 2) Winner = max enabled bid
+            // 2) Find Winner = max enabled bid
             Bid winningBid = null;
             if (auction.getBids() != null && !auction.getBids().isEmpty()) {
                 winningBid = auction.getBids().stream()
@@ -71,7 +83,7 @@ public class AuctionWinnerExpiredScheduler {
                         .orElse(null);
             }
 
-            // Αν δεν υπάρχουν bids
+            // If the auction has no bids
             if (winningBid == null) {
                 log.info("Auction id={} expired with no bids", auction.getId());
 
@@ -96,13 +108,11 @@ public class AuctionWinnerExpiredScheduler {
             winner.setEligibleForChat(true);
             auction.getOwner().setEligibleForChat(true);
 
-            // -----------------------------
-            // ✅ NOTIFICATION: AUCTION_WON
-            // (να μπαίνει ΑΝΕΞΑΡΤΗΤΑ από email)
-            // -----------------------------
+            // NOTIFICATION: AUCTION_WON
             String wonMetadata = "{\"auctionId\":" + auction.getId()
                     + ",\"winningAmount\":\"" + winningAmount.toPlainString() + "\"}";
 
+            // After transaction commit send notification asynchronously to the winner
             eventPublisher.publishEvent(new NotificationEvent(
                     winner.getId(),
                     NotificationType.AUCTION_WON,
@@ -117,6 +127,7 @@ public class AuctionWinnerExpiredScheduler {
                     + ",\"winnerUsername\":\"" + winner.getUsername() + "\""
                     + ",\"winningAmount\":\"" + winningAmount.toPlainString() + "\"}";
 
+            // After transaction commit send notification asynchronously to the owner
             eventPublisher.publishEvent(new NotificationEvent(
                     ownerId,
                     NotificationType.AUCTION_ENDED_FOR_OWNER,
@@ -126,9 +137,7 @@ public class AuctionWinnerExpiredScheduler {
                     ownerMetadata
             ));
 
-            // -----------------------------
-            // ✅ NOTIFICATION: AUCTION_LOST (σε όλους τους άλλους bidders)
-            // -----------------------------
+            // NOTIFICATION: AUCTION_LOST (σε όλους τους άλλους bidders)
             List<UserEntity> bidders =
                     bidRepository.findDistinctBiddersByAuctionId(auction.getId());
 
@@ -148,9 +157,7 @@ public class AuctionWinnerExpiredScheduler {
                 ));
             }
 
-            // -----------------------------
-            // EMAIL στον winner (μέσω event)
-            // -----------------------------
+            // EMAIL to winner.
             String winnerEmail = winner.getEmail();
             if (winnerEmail != null && !winnerEmail.isBlank()) {
                 String subject = "You won the auction: " + auction.getTitle();
@@ -169,7 +176,7 @@ public class AuctionWinnerExpiredScheduler {
                 eventPublisher.publishEvent(new EmailEvent(winnerEmail, subject, body));
             }
 
-            // EMAIL στον owner (μέσω event)
+            // EMAIL to owner
             String ownerEmail = auction.getOwner().getEmail();
             if (ownerEmail != null && !ownerEmail.isBlank()) {
                 String subjectOwner = "Your auction " + auction.getTitle()

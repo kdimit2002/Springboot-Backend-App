@@ -13,13 +13,13 @@ public class AuctionMessage {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // σε ποια auction ανήκει το μήνυμα
+    // Many messages belong to one auction
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "auction_id", nullable = false)
     @JsonBackReference
     private Auction auction;
 
-    // ποιος έστειλε το μήνυμα
+    // messages has a sender
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "sender_id", nullable = false)
     @JsonBackReference

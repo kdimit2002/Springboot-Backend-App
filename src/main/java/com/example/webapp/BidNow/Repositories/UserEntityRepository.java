@@ -21,14 +21,6 @@ public interface UserEntityRepository extends JpaRepository<UserEntity,Long> {
 
     int deleteByFirebaseId(String firebaseId);
 
-//    @Modifying
-//    @Transactional(propagation = Propagation.REQUIRES_NEW)// ToDo: move it to service layer
-//    @Query("UPDATE UserEntity u SET u.isFirebaseCompatible = true WHERE u.firebaseId = :firebase_id")
-//    void markFirebaseCompatible(@Param("firebase_id") String firebaseId);
-
-//    @Query("select u.firebaseId from UserEntity u where u.isFirebaseCompatible = false and u.createdAt < :cutoff")
-//    List<String> findOldUsersWithoutFirebaseClaims(@Param("cutoff") LocalDateTime cutoff);
-
     boolean existsByFirebaseId(String uid);
 
     Optional<UserEntity> findByFirebaseId(String uid);
@@ -46,24 +38,6 @@ public interface UserEntityRepository extends JpaRepository<UserEntity,Long> {
     @Query("UPDATE UserEntity u SET u.avatar = :avatar WHERE u.firebaseId = :firebase_id")
     int updateAvatar(@Param("avatar") Avatar avatar, @Param("firebase_id") String firebaseId);
 
-
-
-//    //todo:is compatible = false or true???
-//    @Modifying
-//    @Transactional
-////    @Query("""
-////        UPDATE UserEntity u
-////        SET\s
-////            u.username = CONCAT('deleted_user_', u.id),
-////            u.email = CONCAT('anonymized_', u.id, '@example.com'),
-////            u.isAnonymized = true,
-////            u.phoneNumber = CONCAT('anonymized_', u.id),
-//            u.firebaseId = CONCAT('deleted_firebase_', u.id),
-//            u.avatar = com.example.webapp.BidNow.Enums.Avatar.DEFAULT,
-//            u.isBanned = false
-//        WHERE u.firebaseId = :userFirebaseId
-//   \s""")
-//    int  anonymizeByFirebaseId(@Param("userFirebaseId")String userFirebaseId);
 
     @Modifying
     @Query("UPDATE UserEntity u SET u.isBanned = true WHERE u.firebaseId = :firebase_id")

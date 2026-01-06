@@ -11,6 +11,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+/**
+ * Event-driven class
+ * for asynchronously sending notifications to the appropriate user
+ */
 @Component
 public class NotificationEventListener {
 
@@ -21,6 +25,9 @@ public class NotificationEventListener {
         this.notificationAsyncService = notificationAsyncService;
     }
 
+    /**
+     * Event will be handled even if no transaction is running.
+     */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onNotificationEvent(NotificationEvent event) {
         log.info("NotificationEvent received AFTER_COMMIT for userId={}, type={}",

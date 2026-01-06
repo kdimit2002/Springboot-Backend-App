@@ -89,7 +89,7 @@ public class UserEntity {
     private List<Auction> auctionList = new ArrayList<>();
 
 
-    @NotEmpty//Todo: maybe remove?
+    @NotEmpty
     @ManyToMany(fetch = FetchType.EAGER)
     @JsonManagedReference
     @JoinTable(
@@ -129,8 +129,6 @@ public class UserEntity {
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
-
-    //private String createdBy;
 
     private String modifiedBy;
 
@@ -180,9 +178,6 @@ public class UserEntity {
         this.auctionList = auctionList;
     }
 
-//    public String getAvatarUrl() {
-//        return this.avatar.getUrl();
-//    }
     public Avatar getAvatar() {
         return this.avatar;
     }
@@ -201,15 +196,6 @@ public class UserEntity {
     }//ToDo: Probably remove set
 
 
-//
-//    public LocalDate getCreationDate() {
-//        return creationDate;
-//    }
-//
-//    public void setCreationDate(LocalDate creationDate) {
-//        this.creationDate = creationDate;
-//    }
-
     public String getPhoneNumber() {
         return phoneNumber;
     }
@@ -225,14 +211,6 @@ public class UserEntity {
     public void setEmail(String email) {
         this.email = email;
     }
-
-//    public String getFacebookAccount() {
-//        return facebookAccount;
-//    }
-//
-//    public void setFacebookAccount(String facebookAccount) {
-//        this.facebookAccount = facebookAccount;
-//    }
 
     public String getUsername() {
         return username;
@@ -301,17 +279,16 @@ public class UserEntity {
     }
 
     /**
-     * On creation initialize creation date and user
+     * On creation, initialize user's creation date.
      */
     @PrePersist
     public void onCreate(){
-        this.isAnonymized = false;
-       // this.isBanned = false;
+        this.isAnonymized = false; // Users are not anonymized upon creation.
         this.createdAt = LocalDateTime.now();
     }
 
     /**
-     * On update initialize update date and user
+     * On update, update user's update date and modified by
      */
     @PreUpdate
     public void onUpdate(){

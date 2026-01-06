@@ -10,6 +10,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * NotificationAsyncService
+ *
+ * Creates Notification records asynchronously, so the main request flow is not delayed.
+ *
+ */
 @Service
 public class NotificationAsyncService {
 
@@ -26,7 +32,7 @@ public class NotificationAsyncService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void createNotification(NotificationEvent e) {
 
-        // Optional: DEDUPE για scheduled reminders (π.χ. “ending soon” να μη γράφεται 2 φορές)
+        // Optional dedupe: avoid inserting the same notification twice (same user/type/metadata).
         if (e.metadataJson() != null
                 && notificationRepository.existsByUser_IdAndTypeAndMetadataJson(e.userId(), e.type(), e.metadataJson())) {
             return;

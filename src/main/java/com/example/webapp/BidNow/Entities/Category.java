@@ -5,9 +5,6 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
 
-/**
- * @Author Kendeas
- */
 @Entity
 @Table(name="categories")
 public class Category {
@@ -42,4 +39,3 @@ public class Category {
         this.id = id;
     }
 }
-//FINISHED

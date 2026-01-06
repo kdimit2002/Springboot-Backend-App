@@ -36,9 +36,9 @@ public class AuctionReminderScheduler {
     }
 
     /**
-     * Τρέχει κάθε 5 λεπτά.
-     * Στέλνει email για auctions που είναι περίπου 10 λεπτά πριν λήξουν
-     * σε όλους τους bidders, ΜΟΝΟ μία φορά ανά auction.
+     * Runs every 5 minutes.
+     * Finds ACTIVE auctions that end in 5–10 minutes and sends a reminder to all bidders.
+     * After sending, it marks the auction as "endingSoonNotified" so we don't send again.
      */
     @Scheduled(cron = "0 */5 * * * *")
     @Transactional // ΟΧΙ readOnly, γιατί κάνουμε update στο auction flag
@@ -46,12 +46,12 @@ public class AuctionReminderScheduler {
 
         LocalDateTime now = LocalDateTime.now();
 
-        // Παράθυρο: από 5 έως 10 λεπτά από τώρα
+        // 5 to 10 minutes window to send notification
         LocalDateTime from = now.plusMinutes(5);
         LocalDateTime to = now.plusMinutes(10);
 
 
-        // ACTIVE auctions που λήγουν στο παράθυρο και ΔΕΝ έχουν ειδοποιηθεί ακόμη
+        // ACTIVE auctions that are in the window and not users weren't notified yet.
         List<Auction> endingSoonAuctions =
                 auctionRepository.findByStatusAndEndDateBetweenAndEndingSoonNotifiedFalse(
                         AuctionStatus.ACTIVE,
@@ -63,11 +63,10 @@ public class AuctionReminderScheduler {
 
             long minutesRemaining = Duration.between(now, auction.getEndDate()).toMinutes();
             if (minutesRemaining < 0) {
-                // Just in case, αν κάτι πήγε στραβά με την ώρα
                 continue;
             }
 
-            // Βρες όλους τους bidders αυτής της δημοπρασίας
+            // Find all auction bidders
             List<UserEntity> bidders =
                     bidRepository.findDistinctBiddersByAuctionId(auction.getId());
 
@@ -106,7 +105,7 @@ public class AuctionReminderScheduler {
 
                 String metadata = "{\"auctionId\":" + auction.getId() + ",\"reminder\":\"ENDING_SOON_10MIN\"}";
 
-                eventPublisher.publishEvent(new NotificationEvent(
+                eventPublisher.publishEvent(new NotificationEvent( //
                         bidder.getId(),
                         NotificationType.AUCTION_ENDING_SOON,
                         "Auction ending soon",
@@ -115,11 +114,8 @@ public class AuctionReminderScheduler {
                 ));
             }
 
-            // Μαρκάρουμε ότι στείλαμε “ending soon” reminder
+            // Mark that bidders were notified
             auction.setEndingSoonNotified(true);
-            // Δεν χρειάζεται explicit save αν το Auction είναι managed από JPA,
-            // αλλά μπορείς να βάλεις και auctionRepository.save(auction) αν θες πιο ξεκάθαρα.
-
 
         }
     }

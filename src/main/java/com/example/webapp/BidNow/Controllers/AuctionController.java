@@ -11,6 +11,9 @@ import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import static com.example.webapp.BidNow.helpers.UserEntityHelper.getUserFirebaseId;
@@ -67,19 +70,37 @@ public class AuctionController {
             throw new RuntimeException("size should be 30");
         }
 
-        userActivityService.saveUserActivityAsync(
-                Endpoint.GET_AUCTIONS,
-                "user=" + getUserFirebaseId() +
-                        ", search=" + search +
-                        ", categoryId=" + categoryId +
-                        ", region=" + region +
-                        ", country=" + country +
-                        ", sortBy=" + sortBy +
-                        ", direction=" + direction +
-                        ", page=" + page +
-                        ", size=" + size +
-                        ", expiredLast7Days=" + expiredLast7Days
-        );
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
+        if(auth != null && auth.isAuthenticated() &&    // If user is signed in
+                !(auth instanceof AnonymousAuthenticationToken))
+            userActivityService.saveUserActivityAsync(
+                    Endpoint.GET_AUCTIONS,
+                    "user=" + getUserFirebaseId() +
+                            ", search=" + search +
+                            ", categoryId=" + categoryId +
+                            ", region=" + region +
+                            ", country=" + country +
+                            ", sortBy=" + sortBy +
+                            ", direction=" + direction +
+                            ", page=" + page +
+                            ", size=" + size +
+                            ", expiredLast7Days=" + expiredLast7Days
+            );
+        else
+            userActivityService.saveUserActivityAsync( // Anonymous user
+                    Endpoint.GET_AUCTIONS,
+                    "Anonymous user"+
+                            ", search=" + search +
+                            ", categoryId=" + categoryId +
+                            ", region=" + region +
+                            ", country=" + country +
+                            ", sortBy=" + sortBy +
+                            ", direction=" + direction +
+                            ", page=" + page +
+                            ", size=" + size +
+                            ", expiredLast7Days=" + expiredLast7Days);
+
 
         Page<AuctionListItemDto> pageResult;
         if (expiredLast7Days) {

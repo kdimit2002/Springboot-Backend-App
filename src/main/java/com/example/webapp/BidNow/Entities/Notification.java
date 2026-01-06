@@ -19,7 +19,7 @@ public class Notification {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private NotificationType type; // OUTBID, AUCTION_ENDING_SOON, AUCTION_WON, ...
+    private NotificationType type;
 
     @Column(nullable = false, length = 200)
     private String title;
@@ -36,7 +36,9 @@ public class Notification {
     @Column
     private LocalDateTime readAt;
 
-    // π.χ. "auctionId=5", "bidAmount=123.45" κτλ
+    // Metadata used by the frontend for deep-link navigation.
+    // Example: "You were outbid on auction 5" -> metadata: {"auctionId": 5}
+    // When the user clicks the notification, the client can route to /auctions/5.
     @Column(length = 1024)
     private String metadataJson;
 
@@ -44,6 +46,9 @@ public class Notification {
     public void onCreate() {
         this.createdAt = LocalDateTime.now();
     }
+
+
+    // getters/setters
 
     public UserEntity getUser() {
         return user;
@@ -117,6 +122,4 @@ public class Notification {
         this.id = id;
     }
 
-
-    // getters/setters...
 }

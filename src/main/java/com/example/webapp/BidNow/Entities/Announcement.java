@@ -34,7 +34,8 @@ public class Announcement {
         this.createdAt = LocalDateTime.now();
     }
 
-    // getters/setters
+
+
     public Long getId() { return id; }
     public NotificationType getType() { return type; }
     public void setType(NotificationType type) { this.type = type; }
