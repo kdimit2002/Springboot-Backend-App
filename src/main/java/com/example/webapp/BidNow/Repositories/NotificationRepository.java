@@ -21,17 +21,16 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     boolean existsByUser_IdAndTypeAndMetadataJson(Long userId, NotificationType type, String metadataJson);
 
-//    void save(Notification n);
 
     long countByUser_FirebaseId(String firebaseId);
 
     @Modifying
     @Query("""
-update Notification n
-set n.read = true, n.readAt = :now
-where n.user.firebaseId = :firebaseId
-  and n.read = false
-""")
+    update Notification n
+    set n.read = true, n.readAt = :now
+    where n.user.firebaseId = :firebaseId
+      and n.read = false
+    """)
     void markAllReadByFirebaseId(String firebaseId, LocalDateTime now);
 
 }

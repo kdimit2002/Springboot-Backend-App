@@ -18,6 +18,7 @@ import com.example.webapp.BidNow.helpers.UserEntityHelper;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.UserRecord.UpdateRequest;
+import jakarta.validation.constraints.Email;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -28,8 +29,14 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
 import java.util.*;
 
+import static com.example.webapp.BidNow.helpers.GeneralHelper.lowerExceptFirst;
 import static com.example.webapp.BidNow.helpers.UserEntityHelper.*;
 
+/**
+ *
+ * Service for managing users
+ *
+ */
 @Service
 public class UserEntityService {
 
@@ -43,10 +50,11 @@ public class UserEntityService {
     private final FirebaseRetryService firebaseRetryService;
     private final LocationRepository locationRepository;
     private final UserActivityService userActivityService;
+    private final EmailService emailService;
 
 
 
-    public UserEntityService(ReferralCodeUsageRepository referralCodeUsageRepository, RoleRepository roleRepository, UserEntityRepository userEntityRepository, FirebaseAuth firebaseAuth, ReferralCodeRepository referralCodeRepository, FirebaseRetryService firebaseRetryService, LocationRepository locationRepository, UserActivityService userActivityService) {
+    public UserEntityService(ReferralCodeUsageRepository referralCodeUsageRepository, RoleRepository roleRepository, UserEntityRepository userEntityRepository, FirebaseAuth firebaseAuth, ReferralCodeRepository referralCodeRepository, FirebaseRetryService firebaseRetryService, LocationRepository locationRepository, UserActivityService userActivityService, EmailService emailService) {
         this.referralCodeUsageRepository = referralCodeUsageRepository;
         this.roleRepository = roleRepository;
         this.userEntityRepository = userEntityRepository;
@@ -55,10 +63,16 @@ public class UserEntityService {
         this.firebaseRetryService = firebaseRetryService;
         this.locationRepository = locationRepository;
         this.userActivityService = userActivityService;
+        this.emailService = emailService;
     }
 
-
-    //Todo: load also user photo in future!,location??
+    /**
+     * Users can view their account information
+     * such as role, username, phone number, avatar, points, location,
+     * if user is a referral code owner or used a referral code before, etc
+     *
+     * @return
+     */
     @Transactional(readOnly = true)
     public UserEntityDto getUserProfile(){
         String userFirebaseId = getUserFirebaseId();
@@ -67,11 +81,11 @@ public class UserEntityService {
     }
 
     private UserEntityDto userEntityToDto(UserEntity userEntity){
-        if (userEntity.getRoles() == null || userEntity.getRoles().isEmpty()) {
-            log.error("User {} doesn't have a role something is wrong",userEntity.getFirebaseId());
-        }
+
+        // Get user's dominant role (1. admin, 2. auctioneer, 3. bidder)
         String userRole = getDominantRole(userEntity.getRoles());
 
+        // Get user's location
         Location location = userEntity.getLocation();
 
         LocationDto locationDto = new LocationDto(
@@ -82,13 +96,20 @@ public class UserEntityService {
                 location.getPostalCode()
         );
 
+        //Todo: can also return owner's referral code to view in his profile
 
+        // Find if user is a referral code owner
         Boolean isReferralCodeOwner  = referralCodeRepository.existsByOwner_FirebaseId(getUserFirebaseId());
-        Boolean hasUsedReferralCode = referralCodeUsageRepository.existsByUser_FirebaseId(getUserFirebaseId());
+        // Initialize the parameter that shows if a user has used a referral code with false
+        Boolean hasUsedReferralCode = Boolean.FALSE;
+        // find the referral code that user used, if user didn't use a referral code return null
         ReferralCodeUsage usedReferralCode = referralCodeUsageRepository.findByUser_FirebaseId(getUserFirebaseId()).orElse(null);
+        // Initialize the parameter that shows the used referral code with Not Used
         String code = "Not Used";
-        if(usedReferralCode != null)code = usedReferralCode.getReferralCode().getCode();
-
+        if(usedReferralCode != null) { // If user used a referral code get the code and mark with true
+            hasUsedReferralCode = Boolean.TRUE;
+            code = usedReferralCode.getReferralCode().getCode();
+        }
 
         return new UserEntityDto(
                 userEntity.getUsername(),userEntity.getEmail(),userEntity.getPhoneNumber()
@@ -97,57 +118,92 @@ public class UserEntityService {
     }
 
 
+    /**
+     * This method is called when a user
+     * wants to change his username
+     *
+     * @param username ,  user's new username
+     */
     @Transactional
     public void updateUsername(String username){
-        if(userEntityRepository.existsByUsername(username))
-            throw new ResponseStatusException(HttpStatus.CONFLICT,"User with username "+ username + "already exists");
+
+        // Get user's current record from database
         UserEntity userEntity = userEntityRepository.findByFirebaseId(getUserFirebaseId())
                 .orElseThrow(()-> new ResourceNotFoundException("User not found"));
 
-        canUpdateProfile(userEntity);
-
         String pastUserName = userEntity.getUsername();
+
+        // New username cannot be the same as the past username
+        if(pastUserName.equals(username))
+            throw new IllegalArgumentException("You already have username: " + username);
+
+        // All users' usernames must be different from each other
+        if(userEntityRepository.existsByUsername(username))
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"User with username "+ username + "already exists");
 
         userEntity.setUsername(username);
 
+        // Update updated date info (auditing, analytics)
         userEntity.setProfileLastUpdatedAt(LocalDateTime.now());
 
+        // Save user
         userEntityRepository.save(userEntity);
 
+        // Logging in database
         userActivityService.saveUserActivityAsync(Endpoint.USER_UPDATE_USERNAME, "User: " + getUserFirebaseId()+ " changed his username from: " + pastUserName + "to: " + userEntity.getUsername() );
 
+        // Update user's username (display name) in firebase
         UpdateRequest request = new UpdateRequest(getUserFirebaseId())
                 .setDisplayName(username);
         try {
-            firebaseAuth.updateUser(
+            firebaseAuth.updateUser( //todo:  apply retry service and after commit
                     new UpdateRequest(getUserFirebaseId()).setDisplayName(username)
             );
         } catch (FirebaseAuthException e) {
-            // αναγκάζουμε rollback
-            throw new RuntimeException("Firebase update failed", e);
+            emailService.sendSimpleEmailAsync("bidnowapp@gmail.com","Username not updated in firebase",
+                    "User with past username: " + pastUserName + " and firebaseId: " + getUserFirebaseId() +
+                            " changed his username to " + username
+                            + " in database but an error: " + e +  " , has occurred and it wasn't changed on Firebase.\n\n" +
+                            "PLEASE CHECK AND CHANGE USER'S FIREBASE DISPLAY NAME TO:\n " + username);
+
         }
     }
 
-
+    /**
+     * This method is called when a user
+     * wants to change his avatar
+     *
+     * @param avatar , Enum parameter of user's {@link Avatar} choice
+     */
     @Transactional
     public void updateAvatar(Avatar avatar){
+        // Retrieve user's record from DB
         UserEntity userEntity = userEntityRepository.findByFirebaseId(getUserFirebaseId())
                         .orElseThrow(()-> new ResourceNotFoundException("User not found"));
-        canUpdateProfile(userEntity);
-        userEntity.setAvatar(avatar);
-        // 🔴 ΕΔΩ κλειδώνουμε για 10 λεπτά
 
+        userEntity.setAvatar(avatar);
+
+        // Update updated date info (auditing, analytics)
         userEntity.setProfileLastUpdatedAt(LocalDateTime.now());
+        // Save user's record with the new avatar to database
         userEntityRepository.save(userEntity);
+        // Logging
         userActivityService.saveUserActivityAsync(Endpoint.USER_UPDATE_AVATAR, "User " + getUserFirebaseId() + " changed his avatar to: " + userEntity.getAvatar());
     }
 
 
-    //Todo: send sms or email to verify before deleting
+    /**
+     * This method is called when a user
+     * wants to delete his account
+     *
+     * @throws FirebaseAuthException
+     */
     @Transactional
     public void anonymizeUser() throws FirebaseAuthException {
         String firebaseId = getUserFirebaseId();
+        // Retrieve user's record from DB
         UserEntity userEntity = userEntityRepository.findByFirebaseId(firebaseId).orElseThrow(()->new ResourceNotFoundException("User was not found"));
+        // Anonymize data that a user can be identified from
         userEntity.setUsername("deleted_user_" + userEntity.getId());
         userEntity.setEmail("anonymized_" + userEntity.getId() + "@example.com");
         userEntity.setAnonymized(true);
@@ -155,22 +211,20 @@ public class UserEntityService {
         userEntity.setPhoneNumber("XXXXXX");
         userEntity.setAvatar(Avatar.DEFAULT);
 
+        // Delete location row
         Location location = userEntity.getLocation();
         if (location != null) {
-            userEntity.setLocation(null);       // σπάει το link στη μνήμη
-            location.setUser(null);             // προαιρετικά, για καθαρότητα
-            locationRepository.delete(location); // ✅ Σβήνει το row από DB
+            userEntity.setLocation(null);
+            location.setUser(null);
+            locationRepository.delete(location); // Delete user's location row from DB
         }
         userEntityRepository.save(userEntity);
+        // Logging
         userActivityService.saveUserActivityAsync(Endpoint.USER_UPDATE_USERNAME, "User: " + firebaseId  + " deleted his account");
+
         firebaseRetryService.deleteUserFromFirebase(firebaseId);
-//        firebaseAuth.revokeRefreshTokens(firebaseId);
     }
 
-
-
-
-    //todo: for each userentity edit post delete api do a scheduled service
 
 
     /**
@@ -182,113 +236,92 @@ public class UserEntityService {
         if(role.equals("Auctioneer")) {
             roles.add(roleRepository.findByName("Auctioneer").orElseThrow(() -> new ResourceNotFoundException("Role not found!")));
             roles.add(roleRepository.findByName("Bidder").orElseThrow(() -> new ResourceNotFoundException("Role not found!")));
-        }else if(role.equals("Bidder")){// ToDo: Must put on startup roles in the database
+        }else if(role.equals("Bidder")){
             roles.add(roleRepository.findByName("Bidder").orElseThrow(() -> new ResourceNotFoundException("Role not found!")));
         }else return null;
         return roles;
     }
 
+
+    /**
+     * This method is called when a user
+     * wants to change his location
+     *
+     * @param locationDto, user's new location info
+     */
     @Transactional
     public void updateLocation(LocationDto locationDto) {
+        if(!lowerExceptFirst(locationDto.country()).equals("Cyprus"))
+            throw new IllegalArgumentException("Country must be Cyprus");
+
         UserEntity user = userEntityRepository.findByFirebaseId(getUserFirebaseId())
                 .orElseThrow(()->new ResourceNotFoundException("User not found"));
-        canUpdateProfile(user);
 
         Location location = locationRepository.findByUserFirebaseId(getUserFirebaseId())
                 .orElseThrow(()->new ResourceNotFoundException("Location was not found"));
+
         location.setCountry(locationDto.country());
         location.setRegion(locationDto.region());
         location.setCity(locationDto.city());
         location.setAddressLine(locationDto.addressLine());
         location.setPostalCode(locationDto.postalCode());
         locationRepository.save(location);
-        // 🔴 ΕΔΩ κλειδώνουμε για 10 λεπτά
+        // Update updated date info (auditing, analytics)
         user.setProfileLastUpdatedAt(LocalDateTime.now());
         userEntityRepository.save(user);
+        // Logging
         userActivityService.saveUserActivityAsync(Endpoint.USER_UPDATE_LOCATION, "User: " + getUserFirebaseId() +  " changed his Location");
 
     }
 
 
-
-    private void canUpdateProfile(UserEntity user) {
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime lastUpdate = user.getProfileLastUpdatedAt();
-
-        if (lastUpdate != null) {
-            long millisecondsSinceLastUpdate =java.time.Duration.between(lastUpdate, now).toMillis();
-            long minutesSinceLastUpdate = java.time.Duration.between(lastUpdate, now).toMinutes();
-
-            if (millisecondsSinceLastUpdate < 100 || minutesSinceLastUpdate < 20) {
-                long remaining = 20 - minutesSinceLastUpdate;
-                throw new IllegalStateException(
-                        "You can update your profile again in " + remaining + " minutes"
-                );
-            }
-        }
-    }
-
-
-
-    //ToDo: na stelni last 10 auctions i last 6 months auction kati tetio
-    //ToDo: mpori na gini me pagination gia dynamic loading
-    //ToDo:@Cacheable(value = "auctionCache", key = "'auction_' + #id") for caching pages??
-    //ToDo: caching with caffeine
-//    @Transactional
-//    public List<AuctionDto> pastUserBids(){
-//        String userFirebaseId = getUserFirebaseId();
-//        bidRepository.getAuctionsByFirebaseId(userFirebaseId);
-//
-//
-//
-//    }
-
-
-
-
     /**
-     * Απλό update ρόλου για τον ΤΡΕΧΟΝΤΑ χρήστη (όχι admin flow).
+     * This method is called when a user
+     * wants to upgrade his role from Bidder to Auctioneer
+     *
+     * todo: must change function name
+     *
+     * @param newRole, user's new {@link Role}
      */
     @Transactional
     public void updateRole(String newRole){
-        // 1) Validate τιμή ρόλου (BIDDER / AUCTIONEER κ.λπ.)
+        // User can no longer go back to Bidder role
         if(newRole.equals("Bidder"))
             throw new IllegalArgumentException("You cannot go back to role Bidder");
         if (!isRoleValid(newRole))
             throw new IllegalArgumentException("Provided an invalid role: " + newRole);
 
-        // 2) Πάρε firebaseId του τρέχοντος χρήστη από SecurityContext / token
+        // Get user's firebase id
         String firebaseId = getUserFirebaseId();
 
-        // 3) Βρες τον user στη βάση
+        // Retrieve user's record from DB
         UserEntity userEntity = userEntityRepository.findByFirebaseId(firebaseId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "User with firebase id: { " + firebaseId + " } was not found"));
 
-        canUpdateProfile(userEntity);
-
-        // 4) Δες αν όντως αλλάζει κάτι
+        // If user already has role Auctioneer or is admin throw exception
         String oldRole = getDominantRole(userEntity.getRoles());
-        if (oldRole.equalsIgnoreCase(newRole)) {
-            // Δεν υπάρχει αλλαγή → απλά κάνε return
-            return;
-        }
+        if (oldRole.equalsIgnoreCase("Admin") || oldRole.equalsIgnoreCase("Auctioneer") )
+            throw new IllegalArgumentException("You cannot change your role!");
 
-        // 5) Με βάση το string newRole, φτιάξε τα Role entities (ίδια λογική όπως στο admin)
-        Set<Role> roles = assignRoles(newRole);  // υποθέτω ότι ήδη υπάρχει αυτό το method στην UserEntityService
+        // Create a set with the new role
+        Set<Role> roles = assignRoles(newRole);
         if (roles == null || roles.isEmpty()) {
             throw new IllegalArgumentException("User didn't provide role");
         }
 
         userEntity.setProfileLastUpdatedAt(LocalDateTime.now());
+        // Set user's roles
         userEntity.setRoles(roles);
         userEntityRepository.save(userEntity);
 
+        // Logging
         userActivityService.saveUserActivityAsync(
                 Endpoint.USER_UPDATE_ROLE,
                 "User " + firebaseId + " updated role from " + oldRole + " to " + newRole
         );
-        // 6) Ενημέρωσε τα custom claims στο Firebase (list με string roles)
+
+        // Update user's roles in firebase
         List<String> roleList = UserEntityHelper.assignRolesList(userEntity.getRoles());
         try{
             firebaseRetryService.setFirebaseClaims(firebaseId, Map.of("roles", roleList));
@@ -297,6 +330,13 @@ public class UserEntityService {
         }
     }
 
+    /**
+     * This method is called when a user logins,
+     * and it's purpose is to send user's information to
+     * the fronted for the proper user experience
+     *
+     * @return, AuthUserDto with user information for the frontend
+     */
     @Transactional(readOnly = true)
     public AuthUserDto signIn() {
         UserEntity userEntity = userEntityRepository.findByFirebaseId(getUserFirebaseId())

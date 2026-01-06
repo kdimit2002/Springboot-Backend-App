@@ -21,10 +21,17 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static com.example.webapp.BidNow.helpers.UserEntityHelper.getUserFirebaseId;
 
+/**
+ * Service for chatting between user's for reach auction
+ *
+ */
 @Service
 public class AuctionChatService {
 
@@ -49,16 +56,14 @@ public class AuctionChatService {
         this.bidRepository = bidRepository;
     }
 
-//    @Transactional(readOnly = true)
-//    public List<ChatMessageResponse> getMessages(Long auctionId) {
-//        List<AuctionMessage> messages =
-//                auctionMessageRepository.findByAuctionIdOrderByCreatedAtAsc(auctionId);
-//
-//        return messages.stream()
-//                .map(this::toResponse)
-//                .toList();
-//    }
 
+    //todo: use caching for large auction messages or pagination
+    /**
+     * Getting auctions' messages
+     *
+     * @param auctionId , the auction that the messages belong to
+     * @return List of messages and details about them
+     */
     @Transactional(readOnly = true)
     public List<ChatMessageResponse> getMessages(Long auctionId) {
         List<AuctionMessage> messages =
@@ -66,16 +71,17 @@ public class AuctionChatService {
 
         final int MAX_MESSAGES = 25;
 
-        // count ανά sender
-        java.util.Map<Long, Integer> perUserCount = new java.util.HashMap<>();
-        java.util.List<ChatMessageResponse> result = new java.util.ArrayList<>();
+        // counter for each sender's remaining messages //todo: make it only for the corresponding sender
+        Map<Long, Integer> perUserCount = new HashMap<>();
+        // List of messages and their metadata
+        List<ChatMessageResponse> result = new ArrayList<>();
 
         for (AuctionMessage m : messages) {
             Long senderId = m.getSender().getId();
             int soFar = perUserCount.getOrDefault(senderId, 0) + 1;
             perUserCount.put(senderId, soFar);
 
-            int remaining = MAX_MESSAGES - soFar;
+            int remaining = MAX_MESSAGES - soFar;// calculate remaining messages for each user
             if (remaining < 0) remaining = 0;
 
             ChatMessageResponse dto = toResponse(m);
@@ -88,12 +94,25 @@ public class AuctionChatService {
     }
 
 
+    /**
+     * Storing a message and broadcasting it to all active users
+     * via websockets.
+     *
+     * Notes:
+     *  - User can send a message to the auction if he meets the requirements
+     *  (has bid to the auction, won an auction in the past, placed an auction in the past)
+     *  - Remove auction from cache if someone send message ( Cache must have auction's newest version)
+     * @param auctionId
+     * @param request
+     * @return
+     */
     @CacheEvict(cacheNames = "auctionById", key = "#auctionId")
     @Transactional
     public ChatMessageResponse sendMessage(Long auctionId,
                                            ChatMessageRequest request) {
 
         if (request.getContent() == null || request.getContent().isBlank()) {
+            // message cannot be empty
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Content is empty"
@@ -112,6 +131,7 @@ public class AuctionChatService {
                         "Auction not found"
                 ));
 
+        // cannot send a message to an expired auction
         if (auction.getEndDate().isBefore(LocalDateTime.now())) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -128,6 +148,7 @@ public class AuctionChatService {
         boolean hasWonAtLeastOneAuction =
                 auctionRepository.existsByWinner_Id(userId);
 
+        // true if user meets the requirements
         boolean canChat =
                 hasBidOnThisAuction || hasCreatedAnyAuction || hasWonAtLeastOneAuction;
 
@@ -140,11 +161,11 @@ public class AuctionChatService {
 
         final int MAX_MESSAGES = 25;
 
-        // 🔹 Πόσα μηνύματα έχει ήδη στείλει ο χρήστης σε αυτό το auction;
+        // Number of messages that user has sent to this auction
         long alreadySent = auctionMessageRepository
                 .countByAuctionIdAndSenderId(auctionId, userId);
 
-        // 🔹 Rate limit 25 μηνύματα ανά χρήστη ανά auction
+        // Rate limit. Each user can send up to 25 messages for each auction
         if (alreadySent >= MAX_MESSAGES) {
             throw new ResponseStatusException(
                     HttpStatus.TOO_MANY_REQUESTS,
@@ -152,7 +173,7 @@ public class AuctionChatService {
             );
         }
 
-        // 🔹 Δημιουργία & αποθήκευση μηνύματος
+        // Create and save message in DB
         AuctionMessage msg = new AuctionMessage();
         msg.setAuction(auction);
         msg.setSender(sender);
@@ -164,13 +185,14 @@ public class AuctionChatService {
                 "User: " + getUserFirebaseId() + " sent message to auction: " + auctionId
         );
 
-        // πόσα απομένουν ΜΕΤΑ από αυτό το μήνυμα
+        // Calculate user's remaining messages for this auction
         int remaining = MAX_MESSAGES - (int) (alreadySent + 1);
         if (remaining < 0) remaining = 0;
 
         ChatMessageResponse dto = toResponse(saved);
         dto.setRemainingMessages(remaining);
 
+        // Broadcast message across all active users
         TransactionSynchronizationManager.registerSynchronization(
                 new TransactionSynchronization() {
                     @Override
@@ -189,7 +211,7 @@ public class AuctionChatService {
 
 
     /**
-     * Στέλνει system μήνυμα στο chat μιας auction ότι ένας χρήστης απενεργοποιήθηκε
+     * todo: maybe remove this
      */
     @CacheEvict(cacheNames = "auctionById", key = "#auctionId")
     @Transactional
@@ -201,7 +223,7 @@ public class AuctionChatService {
         UserEntity disabledUser = userEntityRepository.findById(disabledUserId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // TODO: Προτείνεται να έχεις ειδικό system χρήστη, π.χ. "SYSTEM"
+
         UserEntity systemUser = userEntityRepository.findByEmail("system@bidnow.app").orElseThrow(()-> new ResourceNotFoundException("System user was not found"));
 
         if (systemUser == null) {
@@ -219,7 +241,7 @@ public class AuctionChatService {
         AuctionMessage saved = auctionMessageRepository.save(msg);
         ChatMessageResponse dto = toResponse(saved);
 
-        // WebSocket broadcast στο chat της δημοπρασίας
+        // WebSocket broadcast
         TransactionSynchronizationManager.registerSynchronization(
                 new TransactionSynchronization() {
                     @Override
@@ -235,15 +257,15 @@ public class AuctionChatService {
         return dto;
     }
 
+    // Map AuctionMessage to dto
     private ChatMessageResponse toResponse(AuctionMessage m) {
         ChatMessageResponse dto = new ChatMessageResponse();
         dto.setId(m.getId());
         dto.setContent(m.getContent());
         dto.setCreatedAt(m.getCreatedAt());
 
-        // προσαρμόζεις ανάλογα με UserEntity
         dto.setSenderFirebaseId(m.getSender().getFirebaseId());
-        dto.setSenderDisplayName(m.getSender().getUsername()); // ή fullName, ή ό,τι έχεις
+        dto.setSenderDisplayName(m.getSender().getUsername());
 
         return dto;
     }

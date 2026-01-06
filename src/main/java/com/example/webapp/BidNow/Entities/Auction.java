@@ -35,10 +35,6 @@ public class Auction {
     @Column(name = "status", nullable = false)
     private AuctionStatus status;
 
-//    @OneToMany(mappedBy = "auction", cascade = CascadeType.ALL, orphanRemoval = true)
-//    @JsonManagedReference
-//    private Set<Bid> bids = new TreeSet<>(Comparator.comparing(Bid::getAmount).reversed());
-
     @OneToMany(mappedBy = "auction",
             cascade = CascadeType.ALL,
             orphanRemoval = true)
@@ -101,11 +97,12 @@ public class Auction {
     @JoinColumn(name = "winner_id")
     private UserEntity winner;
 
-
-    // μέσα στην κλάση Auction
-
     @Column(name = "ending_soon_notified", nullable = false)
     private boolean endingSoonNotified = false;
+
+
+
+
 
     public boolean isEndingSoonNotified() {
         return endingSoonNotified;
@@ -126,8 +123,6 @@ public class Auction {
 
 //    @Version
 //    private int version;
-
-    // -------- Getters / Setters (μόνο τα βασικά εδώ) --------
 
     public Long getId() {
         return id;
@@ -239,7 +234,7 @@ public class Auction {
 
     public void setShippingCostPayer(ShippingCostPayer shippingCostPayer) { this.shippingCostPayer = shippingCostPayer; }
 
-    // -------- Lifecycle methods --------
+
 
     @PrePersist
     public void onCreate(){

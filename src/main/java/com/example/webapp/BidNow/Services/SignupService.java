@@ -31,8 +31,12 @@ import static com.example.webapp.BidNow.helpers.UserEntityHelper.getDominantRole
 import static com.example.webapp.BidNow.helpers.UserEntityHelper.getUserFirebaseId;
 
 /**
- * @Author Kendeas
+ * SignupService
+ *
+ * These service is used for the signup flow
+ *
  */
+
 @Service
 public class SignupService {
 
@@ -60,16 +64,25 @@ public class SignupService {
         this.databaseRetryService = databaseRetryService;
     }
 
-    // edo tha kaleso ke to post photo giafto to transactional
-    // Trasnactional apo mono tou den kani rollback gia check exceptions alla mono gia
-    // runtime exceptions firebaseAuthException ine checked exception
-    // ToDo: may rollback exception.class not be necesary]
-    // ToDO: add more exceptions
+    /**
+     *
+     * This is the main method called when a user want to create an account
+     * Note:
+     *  - This is not a signup for admin
+     *  - This method is called after user is created in firebase
+     *  - Database rollbacks if there is any exception(not only if runtime error occurs
+     *
+     * @param avatar , user sends the avatar info that wants to use for his account ( {@link Avatar}//todo urls must be changed to point from cloudflare's r2 to the frontend file structure
+     * @param role , user must choose either a bidder or auctioneer {@link Role}, admin is must be created manually
+     * @param locationDto, user must at least provide the country and region that he is from {@link LocationDto}
+     * @return useful data for frontend to give the correct info depending on his role,username and if he is a referral code owner
+     *
+     * @throws FirebaseAuthException
+     * @throws IOException
+     */
     @Transactional(rollbackFor = Exception.class)
     public AuthUserDto saveUser(Avatar avatar, String role, LocationDto locationDto) throws FirebaseAuthException, IOException {
-        //Not a signup for admin
 
-        // Get user from security context (filter loaded user details there from jwt token)
         // Get firebase unique id
         String firebaseId = SecurityContextHolder.getContext().getAuthentication().getName();
 
@@ -81,12 +94,13 @@ public class SignupService {
 
         UserRecord userRecord;
 
-        //Get user from firebase database
+        //Get user details from firebase
         userRecord = fetchUser(firebaseId);//userRecord = firebaseAuth.getUser(firebaseId);
 
         String username = userRecord.getDisplayName();
         String email = userRecord.getEmail();
         String phone = userRecord.getPhoneNumber();
+        // User that already exists cannot sign up again
         if(userRecord.getUid()!=null && userEntityRepository.existsByFirebaseId(userRecord.getUid())){
             throw new IllegalArgumentException("User: " + username + " already exists");
         }
@@ -111,69 +125,69 @@ public class SignupService {
         List<String> roleList = UserEntityHelper.assignRolesList(roles);
 
 
+        // Create user object in order to save him in database
         UserEntity user = new UserEntity(userRecord.getDisplayName(),userRecord.getEmail(),userRecord.getPhoneNumber(),firebaseId,avatar,roles);
 
 
         //todo:if user os not validated save in database but banned =true
 
+        // Return user's useful info (role, username) if user entity is created
         AuthUserDto authUserDto = validateAndSaveUser(userRecord,user,locationDto);
 
 
 
 
 
-        // 2) Μετά το COMMIT → κάνε set τα Firebase claims
 
         // Put list to map in order to send to firebase claims
         Map<String, Object> mapRole = Map.of("roles",roleList);
+        // Todo: this maybe is bad design. Must check inin future for a better way rather that after commit
+        // After commit -> assign roles to firebase claims
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            // ToDo: Prepi na do periptosis opou exoume network failture xristis graftike stin firebase alla den piasame sxetiko minima graftike
             @Override
             public void afterCommit() {
                 try {
-                    // Όλο το retry να γίνεται μέσα στο FirebaseRetryService
-                    // edo an
+                    // Retry service to avoid connectivity issues
                     firebaseRetryService.setFirebaseClaims(firebaseId, mapRole);
                     //todo: remove markFirebaseCompatible(firebaseId);
                 }catch (Exception e) {
-                    // Τίποτα προς τα πάνω – απλώς log. Το DB έχει ήδη γίνει commit.
+                    // Log error
                     log.error("Unexpected error while assigning Firebase claims after commit for user {}",
-                            firebaseId, e);//ToDo:delete user if set claims failed
+                            firebaseId, e);
+
 
                     emailService.sendSimpleEmailAsync("bidnowapp@gmail.com","Error in assigning claims to user","Unexpected error while assigning Firebase claims after commit, maybe firebase has claims or not we must check, for user with firebaseId: " + firebaseId);
-                    // STEP 1 — delete from DB (retryable)
-                    databaseRetryService.deleteUserFromDatabase(firebaseId);
-                    // STEP 2 — cleanup Firebase user
-                    try {
-                        firebaseRetryService.deleteUserFromFirebase(firebaseId);
-                        log.info("Cleanup success: User {} removed from both DB and Firebase.", firebaseId);
-                    } catch (FirebaseAuthException ex) {
-                        log.warn("Cleanup WARNING: User {} was deleted from DB but FAILED to delete from Firebase.",
-                                firebaseId, ex);
+                   // databaseRetryService.deleteUserFromDatabase(firebaseId);
+//                    try {
+//                        firebaseRetryService.deleteUserFromFirebase(firebaseId);
+//                        log.info("Cleanup success: User {} removed from both DB and Firebase.", firebaseId);
+//                    } catch (FirebaseAuthException ex) {
+//                        log.warn("Cleanup WARNING: User {} was deleted from DB but FAILED to delete from Firebase.",
+//                                firebaseId, ex);
+//
+//                        emailService.sendSimpleEmailAsync(
+//                                "bidnowapp@gmail.com",
+//                                "WARNING: Firebase Delete Failed",
+//                                "User cleanup was partially completed.\n\n" +
+//                                        "User with Firebase ID: " + firebaseId + " was deleted from the database, " +
+//                                        "but could NOT be deleted from Firebase.\n\n" +
+//                                        "The user still exists in Firebase WITHOUT CLAIMS, and they cannot login.\n" +
+//                                        "Exception message: " + ex.getMessage() + "\n\n" +
+//                                        "A scheduler will retry cleanup automatically."
+//                        );
+//
+//                        throw new RuntimeException(ex);
+//                    }
+//                    emailService.sendSimpleEmailAsync(
+//                            "bidnowapp@gmail.com",
+//                            "WARNING: Firebase roles assign failed",
+//                            "User was deleted from database but maybe couldn't be deleted from firebase \n\n" +
+//                                    "User with Firebase ID: " + firebaseId + " was deleted from the database, " +
+//                                    "but could maybe exists in Firebase.\n\n" +
+//                                    "Exception message: " + e.getMessage());
 
-                        emailService.sendSimpleEmailAsync(
-                                "bidnowapp@gmail.com",
-                                "WARNING: Firebase Delete Failed",
-                                "User cleanup was partially completed.\n\n" +
-                                        "User with Firebase ID: " + firebaseId + " was deleted from the database, " +
-                                        "but could NOT be deleted from Firebase.\n\n" +
-                                        "The user still exists in Firebase WITHOUT CLAIMS, and they cannot login.\n" +
-                                        "Exception message: " + ex.getMessage() + "\n\n" +
-                                        "A scheduler will retry cleanup automatically."
-                        );
-
-                        throw new RuntimeException(ex);//ToDo: na baloume custome exception
-                    }
-                    emailService.sendSimpleEmailAsync(
-                            "bidnowapp@gmail.com",
-                            "WARNING: Firebase roles assign failed",
-                            "User was deleted from database but maybe couldn't be deleted from firebase \n\n" +
-                                    "User with Firebase ID: " + firebaseId + " was deleted from the database, " +
-                                    "but could maybe exists in Firebase.\n\n" +
-                                    "Exception message: " + e.getMessage());
-
-                    throw new RuntimeException(e);//ToDo: na baloume custome exception
-                }                        // deleteUserByFirebaseId(firebaseId); // ToDo: Clean up code
+          //          throw new RuntimeException(e);
+                }
             }
         });
 
@@ -209,22 +223,23 @@ public class SignupService {
 
 
 
-//TODO: KALITERA NA KANO DELETE AN PAI KATI STRAVA STO FIREBASE SIGN UP
 
 
 
 
-    // ToDo: will have to make retryable the disable user service.
+    // ToDo: use retry services
 
     public AuthUserDto validateAndSaveUser(UserRecord userRecord,UserEntity user,LocationDto locationDto) throws FirebaseAuthException {
-        // Loading user data from database
         // ToDo: more checks
+        // Get user firebase info
         String firebaseId = userRecord.getUid()
                 ,phoneNumber = userRecord.getPhoneNumber();
 
         String reason="";
-        // User must have username - display name
+        // Throw exception if user already exists
         if(userEntityRepository.existsByFirebaseId(userRecord.getUid()))throw new RuntimeException("User already exists");
+
+        // User must have username - display name in firebase
         if(userRecord.getDisplayName() == null || userRecord.getDisplayName().isBlank()){
 
             log.warn("User {} with phone number {} didn't provide a display name", firebaseId,phoneNumber);
@@ -240,11 +255,12 @@ public class SignupService {
             reason = "User didn't provide phone number. Your account has been disabled please contact bidnow support";
         }
 
-        //todo:
+        // if user doesn't have a phone number or a username then delete user from firebase (this can help if anything went wrong for user to restart his signup flow)
         if(!reason.isEmpty()){
 
             //saveDisabledUser(firebaseId,user,reason);
 
+            // Delete user from firebase with retry service to avoid connectivity issues
             firebaseRetryService.deleteUserFromFirebase(getUserFirebaseId());
 
             throw new FirebaseUserDeleteException(reason);
@@ -253,15 +269,23 @@ public class SignupService {
     }
 
 
+    /**
+     * If user passed validations save usr to database
+     * @param user
+     * @param locationDto
+     * @return
+     */
     public AuthUserDto saveUserAfterSuccessfulValidations(UserEntity user,LocationDto locationDto){
         Location location = new Location(user,locationDto.country(),locationDto.region(),locationDto.city(),locationDto.addressLine(),
                 locationDto.postalCode(),null,null);
+        // Set user's location
         user.setLocation(location);
         userEntityRepository.save(user);
+        // Logging
         userActivityService.saveUserActivityAsync(Endpoint.USER_SIGNUP,"User: " + getUserFirebaseId() + " has signed up");
 
 
-        Boolean isReferralCodeOwner = referralCodeRepository.existsByOwner_FirebaseId(user.getFirebaseId());
+        Boolean isReferralCodeOwner = referralCodeRepository.existsByOwner_FirebaseId(user.getFirebaseId());// Todo: this is not necessary i think
 
         return new AuthUserDto(user.getUsername(),getDominantRole(user.getRoles()),isReferralCodeOwner);
     }
@@ -269,6 +293,8 @@ public class SignupService {
 
 
     //ToDo: scheduler check ban and disabled consistency
+
+    // Todo: this is not used maybe remove this in future
     public void saveDisabledUser(String uid,UserEntity user,String reason) throws FirebaseAuthException {
         try{
 
@@ -298,7 +324,6 @@ public class SignupService {
             log.info("User disabled: {}", userRecord.getUid());
         } catch (FirebaseAuthException e) {
 
-        // Αν αποτύχει το Firebase disable
         emailService.sendSimpleEmailAsync(
                 "bidnowapp@gmail.com",
                 "Firebase disable FAILED",
@@ -308,141 +333,14 @@ public class SignupService {
         throw new RuntimeException("Firebase disable failed", e);
 
         } catch (Exception e) {
-            // Για κάθε άλλο σφάλμα (π.χ. DB)
             emailService.sendSimpleEmailAsync(
                     "bidnowapp@gmail.com",
                     "Database or Email failure during creating disabled user",
                     "User " + uid + " could not be fully disabled.\nError: " + e.getMessage()
             );
             throw new RuntimeException("Unexpected exception occurred while saving disabled user");
-            // throw e; ToDo: maybe leave this??
+            // throw e; ToDo: maybe remove this??
         }
     }
-
-
-
-    ////////////////////////// FORE IMAGE COMPRESSION AND SAVING ///////////////////////////////////////
-
-//    /**
-//     *
-//     * Extract image metadata in order to store in sql database
-//     */
-//    private UserPhoto extractImageInfo(CustomImage customImage) throws IOException {
-//        String filename = customImage.username() + "." + customImage.format();
-//        String url = "https://" + filename;//ToDo: this is prototype
-//        BufferedImage bufferedImage = ImageIO.read(new ByteArrayInputStream(customImage.image()));
-//        int width = bufferedImage.getWidth(),height = bufferedImage.getHeight();
-//        double sizeMB = customImage.image().length / (1024.00 * 1024.00);
-//        return new UserPhoto(filename,url,sizeMB,customImage.format(),width,height,false);
-//    }
-
-//    public String getImageFormat(MultipartFile file){
-//        return Objects.requireNonNull(file.getContentType()).substring(file.getContentType().lastIndexOf("/") + 1);
-//    }
-//
-//    private static String detectImageFormat(byte[] bytes) {
-//
-//        if (bytes == null || bytes.length < 12) {
-//            return "unknown";
-//        }
-//
-//        // ---- PNG ----
-//        // Hex signature: 89 50 4E 47 0D 0A 1A 0A
-//        if (bytes.length >= 8 && bytes[0] == (byte) 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47 && bytes[4] == 0x0D && bytes[5] == 0x0A && bytes[6] == 0x1A && bytes[7] == 0x0A) {
-//            return "png";
-//        }
-//
-//        // ---- JPEG/JPG ----
-//        // SOI marker: FF D8 ... FF D9
-//        if (bytes.length > 3 && bytes[0] == (byte) 0xFF && bytes[1] == (byte) 0xD8) {
-//            return "jpg";
-//        }
-//
-//        // ---- WEBP ----
-//        // RIFF header: "RIFF....WEBP"
-//        if (bytes.length > 12 &&
-//                bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F' &&
-//                bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P') {
-//            return "webp";
-//        }
-//
-//        return "unknown";
-//    }
-//
-
-
-
-
-
-
-
- //ToDo: put this in auction app to validate and compress images
-
-
-
-
-//    byte[] compressedImage;
-//    UserPhoto userPhoto=null;
-
-// ToDo Load image to a database
-
-//                if(ImageFileValidator.validate(file)){
-//        compressedImage = imageCompressionService.compressAndResize(file, Purpose.USER);
-//        String format = detectImageFormat(compressedImage),username = userRecord.getDisplayName();
-//
-//        if(format.equals("unknown")) {
-//            throw new IllegalArgumentException("Unsupported file type");
-//        }
-//
-//        CustomImage customImage = new CustomImage(compressedImage,username,format);//ToDo: change username, it may not be always unique
-//        userPhoto = extractImageInfo(customImage);
-//    }
-
-
-//    /**
-//     *
-//     * Extract image metadata in order to store in sql database
-//     */
-//    private UserPhoto extractImageInfo(CustomImage customImage) throws IOException {
-//        String filename = customImage.username() + "." + customImage.format();
-//        String url = "https://" + filename;//ToDo: this is prototype
-//        BufferedImage bufferedImage = ImageIO.read(new ByteArrayInputStream(customImage.image()));
-//        int width = bufferedImage.getWidth(),height = bufferedImage.getHeight();
-//        double sizeMB = customImage.image().length / (1024.00 * 1024.00);
-//        return new UserPhoto(filename,url,sizeMB,customImage.format(),width,height,false);
-//    }
-
-
-//
-//    private static String detectImageFormat(byte[] bytes) {
-//
-//        if (bytes == null || bytes.length < 12) {
-//            return "unknown";
-//        }
-//
-//        // ---- PNG ----
-//        // Hex signature: 89 50 4E 47 0D 0A 1A 0A
-//        if (bytes.length >= 8 && bytes[0] == (byte) 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47 && bytes[4] == 0x0D && bytes[5] == 0x0A && bytes[6] == 0x1A && bytes[7] == 0x0A) {
-//            return "png";
-//        }
-//
-//        // ---- JPEG/JPG ----
-//        // SOI marker: FF D8 ... FF D9
-//        if (bytes.length > 3 && bytes[0] == (byte) 0xFF && bytes[1] == (byte) 0xD8) {
-//            return "jpg";
-//        }
-//
-//        // ---- WEBP ----
-//        // RIFF header: "RIFF....WEBP"
-//        if (bytes.length > 12 &&
-//                bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F' &&
-//                bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P') {
-//            return "webp";
-//        }
-//
-//        return "unknown";
-//    }
-
-
 
 }

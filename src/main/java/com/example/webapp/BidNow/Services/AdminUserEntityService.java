@@ -32,7 +32,7 @@ import static com.example.webapp.BidNow.helpers.UserEntityHelper.isRoleValid;
 
 
 /**
- * @Author Kendeas
+ * Admin service for managing users
  *
  */
 @Service
@@ -50,14 +50,13 @@ public class AdminUserEntityService {
     private final AuctionChatService auctionChatService;
     private final AuctionRepository auctionRepository;
     private final FirebaseRetryService firebaseRetryService;
-    private final EmailService emailService;
     private final UserEntityRepository userEntityRepository;
     private final UserEntityService userEntityService;
     private final UserActivityService userActivityService;
 
     private final FirebaseAuth firebaseAuth;
 
-    public AdminUserEntityService(BidRepository bidRepository, ApplicationEventPublisher eventPublisher, ReferralCodeRepository referralCodeRepository, ReferralCodeUsageRepository referralCodeUsageRepository, AuctionChatService auctionChatService, AuctionRepository auctionRepository, FirebaseRetryService firebaseRetryService, EmailService emailService, UserEntityRepository userEntityRepository, UserEntityService userEntityService, UserActivityService userActivityService, FirebaseAuth firebaseAuth) {
+    public AdminUserEntityService(BidRepository bidRepository, ApplicationEventPublisher eventPublisher, ReferralCodeRepository referralCodeRepository, ReferralCodeUsageRepository referralCodeUsageRepository, AuctionChatService auctionChatService, AuctionRepository auctionRepository, FirebaseRetryService firebaseRetryService, UserEntityRepository userEntityRepository, UserEntityService userEntityService, UserActivityService userActivityService, FirebaseAuth firebaseAuth) {
         this.bidRepository = bidRepository;
         this.eventPublisher = eventPublisher;
         this.referralCodeRepository = referralCodeRepository;
@@ -65,7 +64,6 @@ public class AdminUserEntityService {
         this.auctionChatService = auctionChatService;
         this.auctionRepository = auctionRepository;
         this.firebaseRetryService = firebaseRetryService;
-        this.emailService = emailService;
         this.userEntityRepository = userEntityRepository;
         this.userEntityService = userEntityService;
         this.userActivityService = userActivityService;
@@ -73,6 +71,22 @@ public class AdminUserEntityService {
     }
 
 
+    /**
+     *
+     * Editing user's information
+     *
+     * Notes:
+     *  - Phone number cannot be changed
+     *  - User can be anonymized here
+     *  - User can be disabled here
+     *  - Firebase auth is updated along with system's DB if needed.
+     *
+     *
+     * @param firebaseId firebases' id is used for user's identification id
+     * @param userEntityUpdateAdmin dto that is sent from admin with the changes
+     * @return , dto with the changes
+     * @throws FirebaseAuthException
+     */
     @Transactional
     public AdminUserEntityDto updateUser(String firebaseId, UserEntityUpdateAdmin userEntityUpdateAdmin) throws FirebaseAuthException {
 
@@ -122,6 +136,7 @@ public class AdminUserEntityService {
         userActivityService.saveUserActivityAsync(Endpoint.ADMIN_UPDATE_USER,"Admin updated user: "+ userEntity.getFirebaseId());
 
 
+        // Find if user is a referral code owner
         Boolean isReferralCodeOwner = false;
         String ownerCode="";
         ReferralCode usersReferralCode = referralCodeRepository.findByOwner_FirebaseId(userEntity.getFirebaseId())
@@ -132,6 +147,7 @@ public class AdminUserEntityService {
             ownerCode = usersReferralCode.getCode();
         }
 
+        // Find if user has used a referral code
         ReferralCodeUsage usedReferralCode = referralCodeUsageRepository.findByUser_FirebaseId(userEntity.getFirebaseId()).orElse(null);
         String code = "Not used";
         Boolean hasUsedReferralCode = false;
@@ -182,9 +198,22 @@ public class AdminUserEntityService {
                 );
     }
 
+    /**
+     * Applies the admin update DTO onto an existing UserEntity.
+     *
+     * Notes:
+     * - If the admin bans a user (and the user was not banned before), we also disable active user actions
+     *   (bids and auctions) to prevent further activity.
+     * - allTimeRewardPoints is treated as a lifetime earned metric:
+     *   it increases only when rewardPoints increases (reductions do not decrease the all-time total).
+     *
+     * @param user existing user entity loaded from the database (will be mutated)
+     * @param userEntityUpdateAdmin admin-provided updated values
+     * @param roles resolved set of roles to assign to the user
+     */
     private void updateFromDtoToUserEntity(UserEntity user, UserEntityUpdateAdmin userEntityUpdateAdmin, Set<Role> roles) {
         if (userEntityUpdateAdmin.isBanned() && !user.getBanned())
-            disableUserActions(user);//Disable users active bids and auctions
+            disableUserActions(user);//Disable users active bids and auctions if user was banned by admin
 
         user.setBanned(userEntityUpdateAdmin.isBanned());
 
@@ -192,6 +221,7 @@ public class AdminUserEntityService {
         Long newPoints = userEntityUpdateAdmin.rewardPoints();
 
         user.setRewardPoints(userEntityUpdateAdmin.rewardPoints());
+        // All time reward points increases only when rewardPoints increases (reductions do not decrease the all-time total)
         user.setAllTimeRewardPoints((newPoints >  oldPoints) ? (user.getAllTimeRewardPoints() + newPoints - oldPoints) : user.getAllTimeRewardPoints() );// 50 , 50     125 , 125   ~   25,  50   ->    125, 150   -> 5
         user.setEmail(userEntityUpdateAdmin.email());
         user.setAnonymized(userEntityUpdateAdmin.isAnonymized());
@@ -210,19 +240,33 @@ public class AdminUserEntityService {
     }
 
 
+    /**
+     * Disable user Actions
+     *
+     * If user is set disabled by admin cancel his bids
+     * and his auctions.
+     *
+     * @param userEntity
+     */
     @Transactional
     public void disableUserActions(UserEntity userEntity) {
-        //Todo: admin message in chat user was disabled so his bid was deleted
+        //Todo: admin message in chat or notification that user was disabled so his bid was deleted
+
+        // Find disabled user's list of bids
         List<Bid> bids = bidRepository.findByBidderId(userEntity.getId());
 
+        // Disable user's bids
         for (Bid bid : bids) bid.setEnabled(false);
 
         // Find auctions that user bid and inform in chat that user was disabled
         List<Auction> auctionsWhereUserBid = auctionRepository.findDistinctByBids_Bidder_Id(userEntity.getId());
 
 
+        // Find the auction's that user bided
         for (Auction auction : auctionsWhereUserBid){
+            // ToDo: maybe remove notification in chat
             auctionChatService.sendUserDisabledSystemMessage(auction.getId(), userEntity.getId());
+            // Notify every bidder in each auction that the disabled user bidded
             for(Bid bid : auction.getBids()){
                 eventPublisher.publishEvent(new NotificationEvent(bid.getBidder().getId(), NotificationType.BID_CANCELLED,"Bidder +" + bid.getBidder().getUsername() + "'s bids were cancelled",
                         "We would like to inform you that Bidder "+ bid.getBidder().getUsername()  +"'s bids were disabled in auction " + auction.getTitle() + " has been cancelled, due to bidder's inappropriate behaviour",
@@ -234,12 +278,17 @@ public class AdminUserEntityService {
 
         }
 
+        // Find the auctions that the disabled user created
         List<Auction> auctions = auctionRepository.findByOwnerId(userEntity.getId());
         if (!auctions.isEmpty()) {
+            // Notify - send email to bidnow and auction participants for the disabling event of the user.
             for (Auction auction : auctions) {
                 if (auction.getEndDate().isAfter(LocalDateTime.now())) {
+                    if (auction.getStatus().equals(AuctionStatus.EXPIRED)) continue;
                     auction.setStatus(AuctionStatus.CANCELLED);
-                    //Todo: Send email to all participants that auctioneer x cancelled the auction
+                    //todo: check that the
+
+                    // Send email to all participants that auctioneer x cancelled the auction
                     List<UserEntity> disabledUserAuctionBidders = bidRepository.findDistinctBiddersByAuctionId(auction.getId());
                     eventPublisher.publishEvent(new EmailEvent(
                             "bidnowapp@gmail.com",
@@ -289,14 +338,27 @@ public class AdminUserEntityService {
     }
 
 
+    /**
+     * Admin to get user's detailed information
+     *
+     * @param firebaseId
+     * @return
+     */
     @Transactional(readOnly = true)
     public AdminUserEntityDto getUser(String firebaseId) {
         UserEntity userEntity = userEntityRepository.findByFirebaseId(firebaseId).orElseThrow(() -> new ResourceNotFoundException("User with firebase id: { " + firebaseId + " }  was not found"));
         return userEntityToDto(userEntity);
     }
 
+    /**
+     *
+     * Turn the existing UserEntity to a DTO in order to give it to admin
+     *
+     * @param userEntity
+     * @return
+     */
     private AdminUserEntityDto userEntityToDto(UserEntity userEntity) {
-        if (userEntity.getRoles() == null || userEntity.getRoles().isEmpty()) {
+        if (userEntity.getRoles() == null || userEntity.getRoles().isEmpty()) {// Good to check if user doesn't have a role
             log.error("User {} doesn't have a role something is wrong", userEntity.getFirebaseId());
             eventPublisher.publishEvent(new EmailEvent(
                     "bidnowapp@gmail.com",
@@ -346,7 +408,17 @@ public class AdminUserEntityService {
                 locationDto,isReferralCodeOwner,ownerCode,hasUsedReferralCode,code);
     }
 
-
+    /**
+     * Get users (paginated), with optional search.
+     *
+     * Admin can view system's users
+     *
+     * @param page
+     * @param size
+     * @param search
+     * @param searchBy
+     * @return
+     */
     @Transactional(readOnly = true)
     public Page<AdminUserEntityDto> getUsersPage(int page, int size,
                                                  String search,
@@ -403,76 +475,4 @@ public class AdminUserEntityService {
     }
 
 
-//    ///////////// REFERRAL CODES /////////////////
-//    @Transactional(readOnly = true)
-//    public Page<ReferralCodeDtoAdminResponse> getReferralCodes(int page, int size) {
-//
-//        if (size > 100) size = 100;
-//
-//        if (size <= 0) size = 20;
-//
-//        if (page < 0) page = 0;
-//
-//        if ((long)page * size > 200000){ // Todo: Maybe change in future
-//            throw new IllegalArgumentException("Page number too large");
-//        }
-//
-//        Pageable pageable = PageRequest.of(page, size, Sort.by("id").ascending());
-//
-//        return referralCodeRepository
-//                .findAll(pageable)
-//                .map(this::referralToDto);
-//    }
-//
-//
-//    private ReferralCodeDtoAdminResponse referralToDto(ReferralCode code){
-//        return new ReferralCodeDtoAdminResponse(
-//                code.getId(), code.getCode(), code.getCreator().getId(), code.getRewardPoints(),
-//                code.getCreatorRewardPoints(), code.getMaxUses(), code.getUsesSoFar(),code.getDisabled()
-//        );
-//
-//    }
-//
-//    @Transactional
-//    public void createReferralCode(ReferralCodeRequest codeDto){
-//        UserEntity user = userEntityRepository.findById(codeDto.creatorId()).orElseThrow(()-> new IllegalArgumentException("User was not found"));
-//        ReferralCode referralCode = new ReferralCode(codeDto.code(),
-//                user,
-//                codeDto.rewardPoints(),
-//                codeDto.creatorRewardPoints(),
-//                codeDto.maxUses(),
-//                0,
-//                codeDto.isDisabled());
-//
-//        referralCodeRepository.save(referralCode);
-//    }
-//
-//
-//
-//
-//
-//
-//    @Transactional
-//    public ReferralCodeDtoAdminResponse editReferralCode(Long id, ReferralCodeRequest codeDto){
-//        ReferralCode referralCode = updateReferralCodeFromDto(id,codeDto);
-//        referralCodeRepository.save(referralCode);
-//        return referralToDto(referralCode);
-//    }
-//
-//    private ReferralCode updateReferralCodeFromDto(Long id, ReferralCodeRequest dto){
-//        ReferralCode referralCode = referralCodeRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Referral code: " + id + " not found"));
-//
-//        if(!referralCode.getCode().equals(dto.code()))throw new IllegalArgumentException("Cannot change code");
-//        if(!Objects.equals(referralCode.getCreator().getId(), dto.creatorId()))throw new IllegalArgumentException("Cannot change creator");
-//
-//        referralCode.setMaxUses(dto.maxUses());
-//        referralCode.setRewardPoints(dto.rewardPoints());
-//        referralCode.setCreatorRewardPoints(dto.creatorRewardPoints());
-//        referralCode.setDisabled(dto.isDisabled());
-//
-//        return referralCode;
-//    }
-//}
 }
-//public record ReferralCodeDto(Long id, String code, Long creatorId,
-//Long rewardPoints, Long creatorRewardPoints, Integer maxUser, Integer usesSoFar,Boolean isDisabled)

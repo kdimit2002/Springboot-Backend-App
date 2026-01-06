@@ -63,7 +63,7 @@ public class R2StorageController {
 
         List<Image> images = imageService.uploadAuctionPhotos(auctionId, files);
 
-        // Γυρίζουμε τα public URLs για να μπορεί frontend να τα δείξει κατευθείαν
+        // Return images public urls to frontend
         List<String> urls = images.stream()
                 .map(Image::getUrl)
                 .toList();

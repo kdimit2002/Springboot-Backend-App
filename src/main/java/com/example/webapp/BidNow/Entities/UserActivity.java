@@ -7,10 +7,9 @@ import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 
 /**
- * @Author Kendeas
+ * Logging entity in database
+ * for auditing and analytics
  */
-
-
 @Entity
 @Table(name = "user_activity")
 public class UserActivity {
@@ -26,10 +25,10 @@ public class UserActivity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "endpoint", nullable = false)
-    private Endpoint endpoint;  // π.χ. LOGIN, UPDATE_PROFILE, PLACE_BID
+    private Endpoint endpoint;  // e.g. LOGIN, UPDATE_PROFILE, PLACE_BID
 
     @Column(length = 512)
-    private String details; // έξτρα πληροφορίες
+    private String details;
 
     @Column(name = "ip_address")
     private String ipAddress;
@@ -60,4 +59,3 @@ public class UserActivity {
 
 
 //ToDo: scheduled task at night to check if something is suspectfull with ip adresses
-// ToDo: all logging must be async commited to DB and ..

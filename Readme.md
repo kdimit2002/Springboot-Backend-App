@@ -11,9 +11,9 @@
 - **Database:** PostgreSQL stores application data (users, auctions, bids).
 - **Storage:** Images are stored in **Cloudflare R2** and served via **public URLs**.
 - **Image flow:** Backend uploads images to R2, stores the public URL in the DB, and returns URLs to the frontend. The browser then loads images directly from R2.
-- **Planned: Failover:** API runs in an active–passive setup behind a load balancer (routes traffic to Primary; fails over to Standby on health check failure).
-- **Planned: Scheduler Execution Model:** Scheduled jobs are enabled only on the primary instance, if primary is down,then secondary's instance schedulers are automatically enabled
-- **Planned: Disaster Recovery Database:** Weekly exports.
+- **Planned → Failover:** API runs in an active–passive setup behind a load balancer (routes traffic to Primary; fails over to Standby on health check failure).
+- **Planned → Scheduler Execution Model:** Scheduled jobs are enabled only on the primary instance, if primary is down,then secondary's instance schedulers are automatically enabled
+- **Planned → Disaster Recovery Database:** Weekly exports.
 ---
 
 ## Tech Stack
@@ -45,7 +45,7 @@
 
 ### Reliability: Retry Services 
 To reduce failure rates caused by transient connectivity issues:
-- **FirebaseRetryService** retries transient Firebase calls, in order to maintain a high level of consistency with the database.. 
+- **FirebaseRetryService** retries transient Firebase calls, in order to maintain a high level of consistency with the database.
 - **R2RetryService** retries transient Cloudflare R2 operations (uploads/updates) to improve success rates.
 - Retries are designed to be **bounded** (no infinite loops) and safe for transient network errors.
 
@@ -119,7 +119,7 @@ WebSocket communication does not use an intermediate message broker
 ### Cloudflare R2 Object Storage
 
 #### Planned: Get Image Flow
-- The browser fetches application data from the backend (e.g., auctions), which includes **public image URLs** stored in the DB.
+- The browser fetches application data from the backend (auctions), which includes **public image URLs** stored in the DB.
 - The browser then downloads images **directly from Cloudflare R2** using those URLs.
 - This keeps the backend out of the heavy bandwidth path and improves performance.
 

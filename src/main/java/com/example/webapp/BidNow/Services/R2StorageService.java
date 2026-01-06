@@ -11,12 +11,21 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * R2StorageService
+ *
+ * - Uploads image files to Cloudflare R2.
+ * - Generates a unique, structured object key to avoid collisions.
+ * - Returns a public URL for direct client access.
+ *
+ */
+
 @Service
 public class R2StorageService {
 
     private final S3Client r2Client;
     private final String bucket;
-    private final String publicBaseUrl; // https://pub-xxxx.r2.dev
+    private final String publicBaseUrl;
 
 
     public R2StorageService(S3Client r2Client,
@@ -28,13 +37,24 @@ public class R2StorageService {
     }
 
 
-    // Todo: Retry Service
+    /**
+     * Called by image service
+     *
+     * Calls cloudflare r2 storage apis to upload the image there
+     * with the key filename
+     * @param file
+     * @param auctionId
+     * @param imageIndex
+     * @param ownerFirebaseUid
+     * @return
+     * @throws IOException
+     */
     public String uploadImage(MultipartFile file,
                                      Long auctionId,
                                      int imageIndex,
                                      String ownerFirebaseUid) throws IOException {
 
-        String key = "images/" + ownerFirebaseUid + "/" + auctionId + "/" + imageIndex + "/"
+        String key = "images/" + ownerFirebaseUid + "/" + auctionId + "/" + imageIndex + "/" // filename in r2
                 + Instant.now().toEpochMilli() + "-" + UUID.randomUUID();
 
         PutObjectRequest putRequest = PutObjectRequest.builder()
@@ -52,35 +72,5 @@ public class R2StorageService {
     }
 
     // ToDo Load image to a database
-
-
-
-//    public record CustomImage(byte[] image,String username,String format){}
-
-//                if(ImageFileValidator.validate(file)){
-//        compressedImage = imageCompressionService.compressAndResize(file, Purpose.USER);
-//        String format = detectImageFormat(compressedImage),username = userRecord.getDisplayName();
-//
-//        if(format.equals("unknown")) {
-//            throw new IllegalArgumentException("Unsupported file type");
-//        }
-//
-//        CustomImage customImage = new CustomImage(compressedImage,username,format);//ToDo: change username, it may not be always unique
-//        userPhoto = extractImageInfo(customImage);
-//    }
-//
-//
-//    /**
-//     *
-//     * Extract image metadata in order to store in sql database
-//     */
-//    private Photo extractImageInfo(CustomImage customImage) throws IOException {
-//        String filename = customImage.username() + "." + customImage.format();
-//        String url = "https://" + filename;//ToDo: this is prototype
-//        BufferedImage bufferedImage = ImageIO.read(new ByteArrayInputStream(customImage.image()));
-//        int width = bufferedImage.getWidth(),height = bufferedImage.getHeight();
-//        double sizeMB = customImage.image().length / (1024.00 * 1024.00);
-//        return new UserPhoto(filename,url,sizeMB,customImage.format(),width,height,false);
-//    }
 
 }

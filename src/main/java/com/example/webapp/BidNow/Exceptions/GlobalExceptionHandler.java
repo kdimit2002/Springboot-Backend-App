@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    //Todo: Logs and send email
+    //Todo: Logs and emails
 
     // @Field validations return field error and error message for example @NotBlank has had blank input
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -47,7 +47,7 @@ public class GlobalExceptionHandler {
                 Map.of("error", ex.getMessage())
         );
     }
-    // When we don't have resource throw it
+    // For firebase connection exceptions
     @ExceptionHandler(FirebaseConnectionException.class)
     public ResponseEntity<?> handleConnectionIssues(FirebaseConnectionException ex) {
         return ResponseEntity.status(500).body(

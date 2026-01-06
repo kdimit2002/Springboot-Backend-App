@@ -54,7 +54,6 @@ public interface AuctionRepository extends JpaRepository<Auction, Long> {
     List<Auction> findByStatusAndEndDateBefore(AuctionStatus status, LocalDateTime now);
 
 
-    // 🔍 SEARCH ΧΩΡΙΣ CATEGORY
     @Query("""
            SELECT a FROM Auction a
            WHERE a.status = :status
@@ -72,7 +71,7 @@ public interface AuctionRepository extends JpaRepository<Auction, Long> {
             Pageable pageable
     );
 
-    // 🔍 SEARCH ΜΕ CATEGORY
+    // Search with category
     @Query("""
            SELECT a FROM Auction a
            WHERE a.status = :status
@@ -109,7 +108,7 @@ public interface AuctionRepository extends JpaRepository<Auction, Long> {
 
 
     /**
-     * ACTIVE δημοπρασίες στις οποίες ο συγκεκριμένος user έχει κάνει bid.
+     * ACTIVE auctions that user has bid
      */
     @Query("""
            SELECT DISTINCT a FROM Auction a
@@ -127,7 +126,7 @@ public interface AuctionRepository extends JpaRepository<Auction, Long> {
     );
 
     /**
-     * EXPIRED δημοπρασίες όπου ο user είναι νικητής (έχει το μεγαλύτερο bid).
+     * User's won auctions.
      */
     @Query("""
            SELECT DISTINCT a FROM Auction a
@@ -152,13 +151,12 @@ public interface AuctionRepository extends JpaRepository<Auction, Long> {
             Pageable pageable
     );
 
-    // Auctions που έχουν λήξει (endDate < now), με συγκεκριμένο status, και ΔΕΝ έχουν ακόμα winner
+    // Expired auctions that there was no winner
     List<Auction> findByStatusAndEndDateBeforeAndWinnerIsNull(
             AuctionStatus status,
             LocalDateTime now
     );
 
-    // Για το "getMyWonAuctions"
     Page<Auction> findByWinnerAndStatus(
             UserEntity winner,
             AuctionStatus status,
@@ -195,7 +193,6 @@ public interface AuctionRepository extends JpaRepository<Auction, Long> {
             Pageable pageable
     );
 
-    // Για CANCELLED (και γενικά χωρίς date φίλτρο)
     Page<Auction> findByOwnerAndStatus(
             UserEntity owner,
             AuctionStatus status,

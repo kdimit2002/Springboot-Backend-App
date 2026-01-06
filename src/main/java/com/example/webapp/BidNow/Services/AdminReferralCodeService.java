@@ -17,6 +17,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
 
+/**
+ *
+ * Referral Code Service
+ *
+ * Note:
+ * - This is an admin Service where admin can inspect,
+ * edit, add referral codes.
+ *
+ */
 @Service
 public class AdminReferralCodeService {
 
@@ -30,7 +39,16 @@ public class AdminReferralCodeService {
         this.userEntityRepository = userEntityRepository;
     }
 
-    ///////////// REFERRAL CODES /////////////////
+
+    /**
+     * Returns a list of regerral codes so that admin can:
+     * - View referral codes and their usage counts.
+     * - Support investigation/auditing/edits of referral activity and achievements.
+     *
+     * @param page zero-based page index (negative values are treated as 0)
+     * @param size page size (defaults to 20 if <= 0, max 100)
+     * @return a page of referral codes mapped to admin DTOs
+     */
     @Transactional(readOnly = true)
     public Page<ReferralCodeDtoAdminResponse> getReferralCodes(int page, int size) {
 
@@ -52,6 +70,9 @@ public class AdminReferralCodeService {
     }
 
 
+    /**
+     * Maps a ReferralCode entity to the admin DTO response.
+     */
     private ReferralCodeDtoAdminResponse referralToDto(ReferralCode code){
         return new ReferralCodeDtoAdminResponse(
                 code.getId(), code.getCode(), code.getOwner().getId(), code.getRewardPoints(),
@@ -60,6 +81,11 @@ public class AdminReferralCodeService {
 
     }
 
+    /**
+     * Admin can create a new referral code for a specific user
+     *
+     * @param codeDto request dto of admin
+     */
     @Transactional
     public void createReferralCode(ReferralCodeRequest codeDto){
         UserEntity user = userEntityRepository.findById(codeDto.ownerId()).orElseThrow(()-> new IllegalArgumentException("User was not found"));
@@ -80,10 +106,14 @@ public class AdminReferralCodeService {
     }
 
 
-
-
-
-
+    /**
+     * Admin can edit an existing referral code
+     * in the application except it's owner
+     *
+     * @param id referral code id
+     * @param codeDto containing the new values
+     * @return
+     */
     @Transactional
     public ReferralCodeDtoAdminResponse editReferralCode(Long id, ReferralCodeRequest codeDto){
         ReferralCode referralCode = updateReferralCodeFromDto(id,codeDto);
@@ -94,6 +124,10 @@ public class AdminReferralCodeService {
         return referralToDto(referralCode);
     }
 
+
+    /**
+     * Maps the admin DTO request to a ReferralCode entity response.
+     */
     private ReferralCode updateReferralCodeFromDto(Long id, ReferralCodeRequest dto){
         ReferralCode referralCode = referralCodeRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Referral code: " + id + " not found"));
 
@@ -108,6 +142,12 @@ public class AdminReferralCodeService {
         return referralCode;
     }
 
+    /**
+     * Admin can view a specific referral code
+     *
+     * @param code
+     * @return
+     */
     @Transactional(readOnly = true)
     public ReferralCodeDtoAdminResponse getReferralCode(String code) {
         ReferralCode referralCode = referralCodeRepository.findByCode(code)

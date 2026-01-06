@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.CrossOrigin;
 
 
 @EnableScheduling
-//@EnableJpaAuditing
 @EnableAsync
 @EnableRetry
 @CrossOrigin("http://localhost:5173")

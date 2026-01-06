@@ -5,9 +5,6 @@ import jakarta.persistence.*;
 
 import java.time.Instant;
 
-/**
- * @Author Kendeas
- */
 @Entity
 @Table(name="images")
 public class Image {
@@ -15,15 +12,6 @@ public class Image {
     @Id
     @GeneratedValue(strategy= GenerationType.IDENTITY)
     private Long id;
-
-
-//    @Column(length=50,unique=true,nullable = false)
-//    private String filename;
-
-//
-//    // Κρατάμε και το R2 storage key (μοναδικό μέσα στο bucket)
-//    @Column(name = "storage_key", length = 255, nullable = false, unique = true)
-//    private String storageKey;
 
     @Column(length=512,unique=true,nullable = false)
     protected String url;

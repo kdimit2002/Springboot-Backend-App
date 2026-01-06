@@ -7,11 +7,15 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.*;
 
+/**
+ *
+ * Static helper methods related to UserEntity authentication and role handling.
+ */
 public class UserEntityHelper {
 
 
     /**
-     * Assign roles to set to store roles into user table
+     * Assign roles to set in order to store roles into user table
      */
     public static List<String> assignRolesList(Set<Role> roles){
         List<String> roleList = new ArrayList<>();
@@ -38,7 +42,11 @@ public class UserEntityHelper {
     }
 
 
-
+    /**
+     * Users with more than one role
+     * will be processed depending
+     * on their dominant role
+     */
     public static String getDominantRole(Set<Role> roles) {
         return roles.stream()
                 .map(Role::getName)                              // παίρνουμε το όνομα
@@ -48,6 +56,9 @@ public class UserEntityHelper {
     }
 
 
+    /**
+     * Role priority map structure
+     */
     private static final Map<String, Integer> ROLE_PRIORITY = Map.of(
             "Admin",3,
             "Auctioneer", 2,

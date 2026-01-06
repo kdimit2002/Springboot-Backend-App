@@ -96,13 +96,6 @@ public class AuthController {
         return ResponseEntity.ok(authUserDto);
     }
 
-
-
-    //Todo: setDisabled controller if user is scheduled to be banned
-
-
-    //ToDo: anonymize user if he wants to delete his account.FIrebase delete on client sdk
-
     /**
      * Delete the current user account.
      *
@@ -219,7 +212,7 @@ public class AuthController {
      */
     @PatchMapping(value = "/updateRole")
     public ResponseEntity<UserUpdateResponse> updateRole(@Valid @RequestBody RoleRequest roleRequest){
-        userEntityService.updateRole(roleRequest.name()); // υλοποίηση στο service
+        userEntityService.updateRole(roleRequest.name());
         return ResponseEntity.ok(new UserUpdateResponse(roleRequest.name()));
     }
 

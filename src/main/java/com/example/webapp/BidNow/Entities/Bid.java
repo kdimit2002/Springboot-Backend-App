@@ -15,10 +15,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 
-/**
- * @Author Kendeas
- */
-//    @Column(name="STUDENT_NAME", length=50, nullable=false, unique=false)!!!!!important
 @Entity
 @Table(name="bids")
 public class Bid {
@@ -29,21 +25,10 @@ public class Bid {
     @Column(name="amount", unique=false,nullable = false)
     private BigDecimal amount;
 
-    @ManyToOne(optional = true,fetch = FetchType.LAZY)//check lazy load
+    @ManyToOne(optional = false,fetch = FetchType.LAZY)//check lazy load
     @JoinColumn(name="auction_id", nullable=false)
     @JsonBackReference
     private Auction auction;
-
-
-    // ToDo: gia pio high performance des:
-//    @Column(name = "auction_id", nullable = false)
-//    @...
-//    private Long auctionId;
-//
-//    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-//    @JoinColumn(name = "auction_id", nullable = false, insertable = false, updatable = false)
-//    private Auction auction;
-
 
     @ManyToOne(fetch = FetchType.LAZY)  //  CHECK
     @JoinColumn(name = "bidder_id",unique = false,nullable = false)

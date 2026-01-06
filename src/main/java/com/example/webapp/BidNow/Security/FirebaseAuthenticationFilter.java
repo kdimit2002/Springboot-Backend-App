@@ -31,7 +31,13 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * @Author Kendeas
+ * This is the main authentication filter
+ *
+ * Security filter that checks firebase and database if the
+ * jwt token that has been sent from a user is a token from firebase,
+ * through checking the signature of the token with the firebase admin sdk
+ * and then checking if the user exists in database which is the source of truth
+ *
  */
 @Component
 //@Order(2)
@@ -52,6 +58,7 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
             @NonNull FilterChain filterChain) throws ServletException, IOException {
 
         String authHeader = request.getHeader("Authorization");
+        // If there is no Bearer token, we don't authenticate here; the request continues as anonymous.
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
@@ -61,10 +68,9 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
 
         String idToken = authHeader.substring(7);
         try {
-            // true => απορρίπτει και tokens που έχουν ανακληθεί
             FirebaseToken decodedToken = (isSensitiveEndpoint(request)) ?
-                    firebaseAuth.verifyIdToken(idToken, true) // Safe verify but slow retryable
-                    : firebaseAuth.verifyIdToken(idToken, false); // fast verify
+                    firebaseAuth.verifyIdToken(idToken, true) // Safe verify but slow. Verifies token through an api to firebase.
+                    : firebaseAuth.verifyIdToken(idToken, false); // fast verify. Verifies token through local cache.
 
 
 
@@ -75,28 +81,14 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
             List<String> roles = List.of();
 
             //ToDo: check if user exists in my database user entity Repository check!
-//
-//            if(!userEntityRepository.existsByFirebaseId(uid)){
-//                //ToDo: logging
-//                SecurityContextHolder.clearContext();
-//                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-//                return;
-//            }
 
-//            @SuppressWarnings("unchecked")
-        //    List<String> roles1 = (List<String>) claims.getOrDefault("roles", Collections.emptyList());
+            // Todo: Warning this maybe use many of the app resources examine in the future
+            // todo: for other ways to do this or by applying caching.
 
-//            if (!isSignUpEndpoint(request) && (roles == null || roles.isEmpty())) {
-//                // Χρήστης χωρίς claims → Unauthorized
-//                SecurityContextHolder.clearContext();
-//                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-//                return;
-//            }
-
-            // Todo: Prosoxi isos argo mpori ite na baloume cache meta ite diagrafi
             if(!isSignUpEndpoint(request)) {
-                if(!userEntityRepository.existsByFirebaseId(uid)){// elexi an o user iparxi stin basi
-                    SecurityContextHolder.clearContext();
+                // Reject tokens that are valid in Firebase but do not map to a user in our system.
+                if(!userEntityRepository.existsByFirebaseId(uid)){
+                    SecurityContextHolder.clearContext(); // Clean security context holder
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                     return;
                 }
@@ -107,25 +99,20 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
                     return;
                 }
 
-                // Todo: indexing database
+                // Todo: have to index database and make a direct query for getting the roles
+
+                // Load roles from DB (authorization source of truth).
                 UserEntity user = userEntityRepository.findByFirebaseId(uid).orElseThrow
                         (()-> new ResourceNotFoundException("User doesn't exist."));
 
                 roles = user.getRoles().stream().map(Role::getName).toList();
 
                 if (roles.isEmpty()) {
-                    // χρήστης χωρίς ρόλο → Forbidden
+                    // Cannot have a user without roles throw exception
                     SecurityContextHolder.clearContext();
                     response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                     return;
                 }
-
-//                if (roles == null || roles.isEmpty()) {// todo: secure?????
-//                    // Χρήστης χωρίς claims → Unauthorized
-//                    SecurityContextHolder.clearContext();
-//                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-//                    return;
-//                }
             }
 
             List<GrantedAuthority> authorities = roles.stream()
@@ -141,20 +128,21 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
             String path = request.getRequestURI();
 
             authentication.setDetails(decodedToken);
-            SecurityContextHolder.getContext().setAuthentication(authentication);
+            SecurityContextHolder.getContext().setAuthentication(authentication); // Fill in context holder to have his information throughout his request
             filterChain.doFilter(request, response);
         }
         catch (FirebaseAuthException | IllegalArgumentException e) {
+            // firebase issues
             SecurityContextHolder.clearContext();
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         }
         catch (DataAccessException e) {
-            // DB πρόβλημα: διαχώρισέ το από το auth
+            // DB issues
             SecurityContextHolder.clearContext();
             response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
         }
         catch (Exception e) {
-            // Απρόσμενο bug → 500 για να μην “θάβεται” ως auth failure
+            // Unexpected errors
             SecurityContextHolder.clearContext();
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         }
@@ -163,22 +151,23 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
     private boolean isSignUpEndpoint(HttpServletRequest request) {
         String path = request.getRequestURI();
 
-        // κρίσιμα endpoints — revocation check = true
         return path.startsWith("/api/auth/signup");
-                //|| path.startsWith("/billing");
     }
 
     private boolean authorizedHttpRequest(HttpServletRequest request) {
         String path = request.getRequestURI();
 
-        // κρίσιμα endpoints — revocation check = true
+        // This endpoint is excluded from the filter because is used before signup to check whether
+        // there is already a user with the username provided
         return path.startsWith("/api/auth/username-availability");
     }
 
     private boolean isSensitiveEndpoint(HttpServletRequest request) {
         String path = request.getRequestURI();
 
-        // κρίσιμα endpoints — revocation check = true
+        // Critical endpoints: these endpoints are not safe to be used if a user has been disabled or
+        // deleted.
+        // Todo: beacause of the DB checks in the filter maybe we can remove the most!
         return path.startsWith("/api/auth/signup")
         || path.startsWith("/api/auth/deleteUser")
                 || path.startsWith("/api/auth/login")

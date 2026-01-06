@@ -12,29 +12,43 @@ import java.io.IOException;
 import java.io.InputStream;
 
 /**
- * @Author Kendeas
+ *
+ * This is a configuration file
+ *
+ * Exposes {@link FirebaseAuth} as a Spring bean for server-side authentication operations.
+ *
  */
 @Configuration
 public class FirebaseConfig {
 
+    /**
+     * This bean is for setting up configuration parameters
+     * It holds common configuration and state for Firebase APIs
+     */
     @Bean
     public FirebaseApp firebaseApp() throws IOException {
-        // 1) Αν έχεις ορίσει GOOGLE_APPLICATION_CREDENTIALS, μπορείς να κάνεις:
+        // 1) Set up GOOGLE_APPLICATION_CREDENTIALS, and then:
         // FirebaseOptions options = FirebaseOptions.builder()
         //        .setCredentials(GoogleCredentials.getApplicationDefault())
-        //        .setProjectId("my-project-id")
+        //        .setProjectId("myProjectId")
         //        .build();
 
-        // 2) Εναλλακτικά, φόρτωσε από classpath (για dev):
+        // For development
         try (InputStream in = new ClassPathResource("local-f4b46-firebase-adminsdk-fbsvc-e842917a52.json").getInputStream()) {
             FirebaseOptions options = FirebaseOptions.builder()
                     .setCredentials(GoogleCredentials.fromStream(in))
-                    .setProjectId("local-f4b46") // <-- Βάλε το Project ID σου
+                    .setProjectId("local-f4b46")
                     .build();
             return FirebaseApp.initializeApp(options);
         }
     }
 
+    /**
+     * Load bean that handles all server-side Firebase Authentication actions.
+     * Our App server use it to perform a variety of authentication-related operations to
+     * firebase authentication.
+     * @param app, configuration instance
+     */
     @Bean
     public FirebaseAuth firebaseAuth(FirebaseApp app) {
         return FirebaseAuth.getInstance(app);

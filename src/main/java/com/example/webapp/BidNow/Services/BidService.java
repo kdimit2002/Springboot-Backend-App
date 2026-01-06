@@ -26,7 +26,12 @@ import java.time.LocalDateTime;
 
 import static com.example.webapp.BidNow.helpers.UserEntityHelper.getUserFirebaseId;
 
-
+/**
+ * Service for managing bids.
+ *
+ * Handles bid validation rules, optional auction end-date extension,
+ * persistence, notifications (via events), and real-time updates (WebSocket).
+ */
 @Service
 public class BidService {
 
@@ -34,15 +39,17 @@ public class BidService {
     private final BidRepository bidRepository;
     private final AuctionRepository auctionRepository;
     private final UserEntityRepository userRepository;
-    private final SimpMessagingTemplate messagingTemplate; // για WebSocket STOMP
+    private final SimpMessagingTemplate messagingTemplate; // WebSocket STOMP publisher
     private final ApplicationEventPublisher eventPublisher;
 
-
-
-    public BidService(UserActivityService userActivityService, BidRepository bidRepository,
-                      AuctionRepository auctionRepository,
-                      UserEntityRepository userRepository,
-                      SimpMessagingTemplate messagingTemplate, ApplicationEventPublisher eventPublisher) {
+    public BidService(
+            UserActivityService userActivityService,
+            BidRepository bidRepository,
+            AuctionRepository auctionRepository,
+            UserEntityRepository userRepository,
+            SimpMessagingTemplate messagingTemplate,
+            ApplicationEventPublisher eventPublisher
+    ) {
         this.userActivityService = userActivityService;
         this.bidRepository = bidRepository;
         this.auctionRepository = auctionRepository;
@@ -51,14 +58,22 @@ public class BidService {
         this.eventPublisher = eventPublisher;
     }
 
+    //ToDo: Bids must be enabled to retrieve them!!!
 
-    //ToDo: Bids must be enabled is true to retrieve them!!!
-
-
+    /**
+     * Places a bid for a given auction.
+     *
+     * Notes:
+     * - Evicts auction cache to force fresh data on next read.
+     * - Uses multiple business rules (status, ownership, min increment, anti-last-second bids).
+     * - Publishes notifications as events
+     * - Sends a WebSocket update AFTER_COMMIT so clients see only committed data.
+     */
     @CacheEvict(cacheNames = "auctionById", key = "#auctionId")
     @Transactional
     public BidEventDto placeBid(Long auctionId, String firebaseId, BigDecimal amount) {
 
+        // Load auction and bidder
         Auction auction = auctionRepository.findById(auctionId)
                 .orElseThrow(() -> new RuntimeException("Auction not found"));
 
@@ -67,31 +82,41 @@ public class BidService {
 
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime end = auction.getEndDate();
-
         long secondsUntilEnd = Duration.between(now, end).getSeconds();
 
-        if (auction.getOwner().getFirebaseId().equals(bidder.getFirebaseId()))
+        // Prevent owner from bidding on their own auction.
+        if (auction.getOwner().getFirebaseId().equals(bidder.getFirebaseId())) {
             throw new IllegalArgumentException("You cannot bid on your Auction");
+        }
 
-        if (auction.getStatus() == AuctionStatus.EXPIRED || auction.getEndDate().isBefore(now))
+        // Reject bids on expired/finished auctions.
+        if (auction.getStatus() == AuctionStatus.EXPIRED || auction.getEndDate().isBefore(now)) {
             throw new IllegalArgumentException("The auction has finished");
+        }
 
-        if (!auction.getStatus().equals(AuctionStatus.ACTIVE))
+        // Only ACTIVE auctions accept bids.
+        if (!auction.getStatus().equals(AuctionStatus.ACTIVE)) {
             throw new IllegalArgumentException("This auction is not active");
+        }
 
         // -------------------------------
-        // Κανόνας minBidIncrement
+        // Min increment rule:
+        // first bid => startingAmount + minInc
+        // next bid  => highestBid + minInc
         // -------------------------------
         BigDecimal minInc = auction.getMinBidIncrement();
 
         Bid prevHighest = null;
         BigDecimal minimumAllowed;
+
         if (auction.getBids().isEmpty()) {
-            // Πρώτο bid → τουλάχιστον startingAmount + minInc
             minimumAllowed = auction.getStartingAmount().add(minInc);
         } else {
-            // Επόμενα bids → τουλάχιστον highestBid + minInc
-            prevHighest = bidRepository.findTopByAuction_IdAndIsEnabledTrueOrderByAmountDescCreatedAtDesc(auctionId).orElseThrow(()->new ResourceNotFoundException("Bid not found"));
+            // Use repository to get the true highest bid (safer than relying on in-memory ordering).
+            prevHighest = bidRepository
+                    .findTopByAuction_IdAndIsEnabledTrueOrderByAmountDescCreatedAtDesc(auctionId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Bid not found"));
+
             minimumAllowed = prevHighest.getAmount().add(minInc);
         }
 
@@ -101,38 +126,43 @@ public class BidService {
                             " (minimum increment " + minInc + ")"
             );
         }
-        // -------------------------------
 
+        // Extra safety check on time window.
         if (secondsUntilEnd <= 0) {
             throw new IllegalArgumentException("The auction has finished");
         }
 
+        // Anti-sniping rule: disallow bids in the last 2 seconds.
         if (secondsUntilEnd <= 2) {
             throw new IllegalArgumentException("You cannot place a bid in the last 2 seconds of the auction");
         }
 
-        // guarantee at least 60s αν είμαστε στο τελευταίο λεπτό
+        // If bid arrives in the last minute, extend so there is always at least 60 seconds remaining.
         if (secondsUntilEnd < 60) {
             LocalDateTime newEndDate = now.plusSeconds(60);
             auction.setEndDate(newEndDate);
         }
 
+        // Persist bid.
         Bid bid = new Bid();
         bid.setAuction(auction);
         bid.setBidder(bidder);
         bid.setAmount(amount);
 
         Bid saved = bidRepository.save(bid);
+
+        // logging
         userActivityService.saveUserActivityAsync(
                 Endpoint.PLACE_BID,
                 "User: " + getUserFirebaseId() + " placed " +
                         bid.getAmount() + " on auction: " + auctionId
         );
 
-        // OUTBID notify: αν υπήρχε προηγούμενος highest και ΔΕΝ είναι ο ίδιος user
+        // OUTBID notification:
+        // notify previous highest bidder if there was one and it’s not the same user.
         if (prevHighest == null || !prevHighest.getBidder().getId().equals(bidder.getId())) {
 
-            if(prevHighest != null ) {
+            if (prevHighest != null) {
                 Long outbidUserId = prevHighest.getBidder().getId();
 
                 String metadata = "{\"auctionId\":" + auctionId
@@ -148,9 +178,9 @@ public class BidService {
                         "User \"" + bidder.getUsername() + "\" outbid you on \"" + auction.getTitle() + "\". New bid: €" + saved.getAmount(),
                         metadata
                 ));
-
             }
-            // ✅ NEW_BID_ON_MY_AUCTION: ενημερώνουμε τον owner
+
+            // Notify auction owner about the new bid.
             Long ownerId = auction.getOwner().getId();
 
             String ownerMetadata = "{"
@@ -169,9 +199,9 @@ public class BidService {
                             + ") on your auction \"" + auction.getTitle() + "\".",
                     ownerMetadata
             ));
-
         }
 
+        // Include (possibly updated) endDate in the event payload.
         LocalDateTime newEndDate = auction.getEndDate();
 
         BidEventDto dto = new BidEventDto(
@@ -183,20 +213,17 @@ public class BidService {
                 newEndDate
         );
 
-        TransactionSynchronizationManager.registerSynchronization(
-                new TransactionSynchronization() {
-                    @Override
-                    public void afterCommit() {
-                        messagingTemplate.convertAndSend(
-                                "/topic/auctions/" + auctionId,
-                                dto
-                        );
-                    }
-                }
-        );
+        // WebSocket publish only after DB commit to all active users
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                messagingTemplate.convertAndSend(
+                        "/topic/auctions/" + auctionId,
+                        dto
+                );
+            }
+        });
 
         return dto;
     }
-
-
 }

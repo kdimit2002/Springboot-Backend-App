@@ -7,6 +7,14 @@ import jakarta.validation.constraints.PositiveOrZero;
 import javax.annotation.Nullable;
 import java.math.BigDecimal;
 
+/**
+ * This entity is being used in order to
+ * store the referral codes of the applications
+ * referral code owners.
+ *
+ * Each user can have at most one referral code.
+ *
+ */
 @Entity
 @Table(name = "referral_codes")
 public class ReferralCode {
@@ -16,7 +24,7 @@ public class ReferralCode {
     private Long id;
 
 
-    // Ο κωδικός που θα βάζει ο άλλος
+    // Code that user will apply
     @Column(nullable = false, unique = true)
     private String code;
 
@@ -31,15 +39,15 @@ public class ReferralCode {
     private Long rewardPoints = 0L;
 
 
-    // Πόσους πόντους δίνει στον δημιουργό όταν κάποιος το χρησιμοποιεί
+    // Owners reward points
     @PositiveOrZero
     private Long ownerRewardPoints = 0L;
 
-    // Πόσες φορές μπορεί να χρησιμοποιηθεί αυτός ο κωδικός
+    // How many times this code can be used
     @PositiveOrZero
     private Integer maxUses = 0;
 
-    // Πόσες φορές έχει ήδη χρησιμοποιηθεί
+    // How many times this code has been used
     @PositiveOrZero
     private Integer usesSoFar = 0;
 
