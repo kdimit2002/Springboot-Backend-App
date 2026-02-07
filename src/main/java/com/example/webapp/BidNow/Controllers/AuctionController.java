@@ -42,6 +42,7 @@ public class AuctionController {
         this.auctionService = auctionService;
     }
 
+
     /**
      * Get active by default, or expired last days auctions.
      *

@@ -64,6 +64,10 @@ public class SignupService {
         this.databaseRetryService = databaseRetryService;
     }
 
+
+
+    // Fetch user from firebase retry if firebase authentication exception.
+
     /**
      *
      * This is the main method called when a user want to create an account
@@ -84,7 +88,7 @@ public class SignupService {
     public AuthUserDto saveUser(Avatar avatar, String role, LocationDto locationDto) throws FirebaseAuthException, IOException {
 
         // Get firebase unique id
-        String firebaseId = SecurityContextHolder.getContext().getAuthentication().getName();
+        String firebaseId = getUserFirebaseId();
 
         // User role must be either Auctioneer or Bidder
         if(role.isBlank() || !(role.equals("Auctioneer")  || role.equals("Bidder"))){
@@ -129,19 +133,14 @@ public class SignupService {
         UserEntity user = new UserEntity(userRecord.getDisplayName(),userRecord.getEmail(),userRecord.getPhoneNumber(),firebaseId,avatar,roles);
 
 
-        //todo:if user os not validated save in database but banned =true
+        //todo:if user is not validated save in database but banned =true
 
         // Return user's useful info (role, username) if user entity is created
         AuthUserDto authUserDto = validateAndSaveUser(userRecord,user,locationDto);
 
-
-
-
-
-
         // Put list to map in order to send to firebase claims
         Map<String, Object> mapRole = Map.of("roles",roleList);
-        // Todo: this maybe is bad design. Must check inin future for a better way rather that after commit
+
         // After commit -> assign roles to firebase claims
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
@@ -149,7 +148,6 @@ public class SignupService {
                 try {
                     // Retry service to avoid connectivity issues
                     firebaseRetryService.setFirebaseClaims(firebaseId, mapRole);
-                    //todo: remove markFirebaseCompatible(firebaseId);
                 }catch (Exception e) {
                     // Log error
                     log.error("Unexpected error while assigning Firebase claims after commit for user {}",
@@ -157,50 +155,13 @@ public class SignupService {
 
 
                     emailService.sendSimpleEmailAsync("bidnowapp@gmail.com","Error in assigning claims to user","Unexpected error while assigning Firebase claims after commit, maybe firebase has claims or not we must check, for user with firebaseId: " + firebaseId);
-                   // databaseRetryService.deleteUserFromDatabase(firebaseId);
-//                    try {
-//                        firebaseRetryService.deleteUserFromFirebase(firebaseId);
-//                        log.info("Cleanup success: User {} removed from both DB and Firebase.", firebaseId);
-//                    } catch (FirebaseAuthException ex) {
-//                        log.warn("Cleanup WARNING: User {} was deleted from DB but FAILED to delete from Firebase.",
-//                                firebaseId, ex);
-//
-//                        emailService.sendSimpleEmailAsync(
-//                                "bidnowapp@gmail.com",
-//                                "WARNING: Firebase Delete Failed",
-//                                "User cleanup was partially completed.\n\n" +
-//                                        "User with Firebase ID: " + firebaseId + " was deleted from the database, " +
-//                                        "but could NOT be deleted from Firebase.\n\n" +
-//                                        "The user still exists in Firebase WITHOUT CLAIMS, and they cannot login.\n" +
-//                                        "Exception message: " + ex.getMessage() + "\n\n" +
-//                                        "A scheduler will retry cleanup automatically."
-//                        );
-//
-//                        throw new RuntimeException(ex);
-//                    }
-//                    emailService.sendSimpleEmailAsync(
-//                            "bidnowapp@gmail.com",
-//                            "WARNING: Firebase roles assign failed",
-//                            "User was deleted from database but maybe couldn't be deleted from firebase \n\n" +
-//                                    "User with Firebase ID: " + firebaseId + " was deleted from the database, " +
-//                                    "but could maybe exists in Firebase.\n\n" +
-//                                    "Exception message: " + e.getMessage());
-
-          //          throw new RuntimeException(e);
                 }
             }
         });
-
-
-
-
         return authUserDto;
     }
 
-
-
-    // Fetch user from firebase retry if firebase authentication exception.
-    private UserRecord fetchUser(String firebaseId)  {
+    public UserRecord fetchUser(String firebaseId)  {
         UserRecord userRecord = null;
         try {
             userRecord = firebaseRetryService.getUserFromFirebase(firebaseId);

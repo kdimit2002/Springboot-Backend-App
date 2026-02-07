@@ -1,14 +1,235 @@
 @startuml
 skinparam classAttributeIconSize 0
 
-' Entities
-class User
-class Auction
-class Bid
+class UserEntity {
+  +Long id
+  +String username
+  +String email
+  +String phoneNumber
+  +String firebaseId
+  +Long rewardPoints
+  +Long allTimeRewardPoints
+  +Avatar avatar
+  +Boolean isBanned
+  +Boolean isAnonymized
+  +boolean eligibleForChat
+  +LocalDateTime profileLastUpdatedAt
+  +LocalDateTime createdAt
+  +LocalDateTime updatedAt
+  +String modifiedBy
+  +int version
+}
 
-' Relations (παράδειγμα)
-User "1" -- "*" Auction : owns
-Auction "1" -- "*" Bid : has
-User "1" -- "*" Bid : places
+class Auction {
+  +Long id
+  +AuctionStatus status
+  +BigDecimal minBidIncrement
+  +String title
+  +String shortDescription
+  +String description
+  +BigDecimal startingAmount
+  +LocalDateTime startDate
+  +LocalDateTime endDate
+  +ShippingCostPayer shippingCostPayer
+  +boolean endingSoonNotified
+  +LocalDateTime createdAt
+  +LocalDateTime updatedAt
+  +String createdBy
+  +String modifiedBy
+}
+
+class Bid {
+  +Long id
+  +BigDecimal amount
+  +boolean isEnabled
+  +LocalDateTime createdAt
+}
+
+class Category {
+  +Long id
+  +String name
+}
+
+class Image {
+  +Long id
+  +String url
+  +long sizeBytes
+  +String format
+  +int width
+  +int height
+  +int sortOrder
+  +Instant createdAt
+}
+
+class Location {
+  +Long id
+  +String country
+  +Region region
+  +String city
+  +String addressLine
+  +String postalCode
+  +BigDecimal latitude
+  +BigDecimal longitude
+}
+
+class AuctionMessage {
+  +Long id
+  +String content
+  +LocalDateTime createdAt
+}
+
+class Notification {
+  +Long id
+  +NotificationType type
+  +String title
+  +String body
+  +boolean read
+  +LocalDateTime createdAt
+  +LocalDateTime readAt
+  +String metadataJson
+}
+
+class Announcement {
+  +Long id
+  +NotificationType type
+  +String title
+  +String body
+  +String metadataJson
+  +LocalDateTime createdAt
+}
+
+class ReferralCode {
+  +Long id
+  +String code
+  +Long rewardPoints
+  +Long ownerRewardPoints
+  +Integer maxUses
+  +Integer usesSoFar
+  +Boolean isDisabled
+}
+
+class ReferralCodeUsage {
+  +Long id
+  +LocalDateTime usedAt
+}
+
+class Role {
+  +Long id
+  +String name
+}
+
+class UserActivity {
+  +Long id
+  +Endpoint endpoint
+  +String details
+  +String ipAddress
+  +LocalDateTime createdAt
+}
+
+enum AuctionStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum ShippingCostPayer {
+  SELLER
+  BUYER
+  SPLIT
+}
+
+enum NotificationType {
+  OUTBID
+  AUCTION_ENDING_SOON
+  AUCTION_WON
+  AUCTION_LOST
+  AUCTION_APPROVED
+  NEW_BID_ON_MY_AUCTION
+  AUCTION_ENDED_FOR_OWNER
+  AUCTION_CANCELLED
+  BID_CANCELLED
+  GENERAL
+}
+
+enum Region {
+  NICOSIA
+  LIMASSOL
+  LARNACA
+  PAPHOS
+  FAMAGUSTA
+}
+
+enum Avatar {
+  BEARD_MAN_AVATAR
+  MAN_AVATAR
+  BLONDE_GIRL_AVATAR
+  GIRL_AVATAR
+  DEFAULT_AVATAR
+  DEFAULT
+}
+
+enum Endpoint {
+  APPROVE
+  CREATE_CATEGORY
+  UPDATE_CATEGORY
+  DELETE_CATEGORY
+  CREATE_REFERRAL_CODE
+  EDIT_REFERRAL_CODE
+  ADMIN_UPDATE_USER
+  SEND_MESSAGE
+  GET_AUCTIONS
+  GET_AUCTION
+  CREATE_AUCTION
+  GET_MY_ACTIVE_BID_AUCTIONS
+  GET_MY_WON_AUCTIONS
+  USER_SIGNUP
+  USER_UPDATE_USERNAME
+  USER_UPDATE_AVATAR
+  USER_UPDATE_LOCATION
+  PLACE_BID
+  ADD_IMAGES
+  USE_REFERRAL_CODE
+  USER_SIGNIN
+  USER_UPDATE_ROLE
+  GET_MY_PENDING_AUCTIONS
+  GET_MY_AUCTIONS
+  CANCEL_AUCTION
+}
+
+' Relationships
+UserEntity "1" -- "0..*" Auction : owns
+Auction "0..*" -- "0..1" UserEntity : wonBy
+
+Category "1" -- "0..*" Auction : category
+
+Auction "1" -- "0..*" Bid : bids
+UserEntity "1" -- "0..*" Bid : bids
+
+Auction "1" -- "0..*" Image : images
+
+UserEntity "1" -- "1" Location : lives
+
+Auction "1" -- "0..*" AuctionMessage : messages
+UserEntity "1" -- "0..*" AuctionMessage : sends
+
+UserEntity "1" -- "0..*" Notification : has
+
+UserEntity "1" -- "0..*" UserActivity : has
+
+UserEntity "1" -- "0..1" ReferralCode : owns
+ReferralCode "1" -- "0..*" ReferralCodeUsage : usages
+UserEntity "1" -- "1" ReferralCodeUsage : uses
+
+UserEntity "0..*" -- "1..*" Role : has
+
+' Enum usage
+AuctionStatus .. Auction
+ShippingCostPayer .. Auction
+NotificationType .. Notification
+NotificationType .. Announcement
+Region .. Location
+Avatar .. UserEntity
+Endpoint .. UserActivity
 
 @enduml

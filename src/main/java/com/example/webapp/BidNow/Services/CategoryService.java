@@ -35,7 +35,6 @@ public class CategoryService {
 
         String name = raw.trim();
 
-        // Handles cases like: "\"Electronics\"" coming from JSON or UI.
         if (name.startsWith("\"") && name.endsWith("\"") && name.length() >= 2) {
             name = name.substring(1, name.length() - 1);
         }

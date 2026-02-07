@@ -86,13 +86,14 @@ public class FirebaseAuthenticationFilter extends OncePerRequestFilter {
             // todo: for other ways to do this or by applying caching.
 
             if(!isSignUpEndpoint(request)) {
-                // Reject tokens that are valid in Firebase but do not map to a user in our system.
+                // Reject if user isn't is DB
                 if(!userEntityRepository.existsByFirebaseId(uid)){
                     SecurityContextHolder.clearContext(); // Clean security context holder
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                     return;
                 }
-                boolean disabled = userEntityRepository.isUserBanned(uid);//Todo:maybe remove pr cached or indexed if slow
+                // Reject if user is banned in DB
+                boolean disabled = userEntityRepository.isUserBanned(uid);//Todo:maybe use index or cache if slow
                 if (disabled) {
                     SecurityContextHolder.clearContext();
                     response.setStatus(HttpServletResponse.SC_FORBIDDEN);

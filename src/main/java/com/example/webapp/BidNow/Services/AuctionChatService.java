@@ -106,7 +106,6 @@ public class AuctionChatService {
      * @param request
      * @return
      */
-    @CacheEvict(cacheNames = "auctionById", key = "#auctionId")
     @Transactional
     public ChatMessageResponse sendMessage(Long auctionId,
                                            ChatMessageRequest request) {
@@ -182,7 +181,7 @@ public class AuctionChatService {
         AuctionMessage saved = auctionMessageRepository.save(msg);
         userActivityService.saveUserActivityAsync(
                 Endpoint.SEND_MESSAGE,
-                "User: " + getUserFirebaseId() + " sent message to auction: " + auctionId
+                "User: " + getUserFirebaseId() + " has sent message to auction: " + auctionId
         );
 
         // Calculate user's remaining messages for this auction
@@ -208,54 +207,6 @@ public class AuctionChatService {
         return dto;
     }
 
-
-
-    /**
-     * todo: maybe remove this
-     */
-    @CacheEvict(cacheNames = "auctionById", key = "#auctionId")
-    @Transactional
-    public ChatMessageResponse sendUserDisabledSystemMessage(Long auctionId, Long disabledUserId) {
-
-        Auction auction = auctionRepository.findById(auctionId)
-                .orElseThrow(() -> new RuntimeException("Auction not found"));
-
-        UserEntity disabledUser = userEntityRepository.findById(disabledUserId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-
-        UserEntity systemUser = userEntityRepository.findByEmail("system@bidnow.app").orElseThrow(()-> new ResourceNotFoundException("System user was not found"));
-
-        if (systemUser == null) {
-            throw new RuntimeException("System user not configured (system@bidnow.app)");
-        }
-
-        String content = "User \"" + disabledUser.getUsername()
-                + "\" was disabled by an administrator. Their bids in this auction are no longer active.";
-
-        AuctionMessage msg = new AuctionMessage();
-        msg.setAuction(auction);
-        msg.setSender(systemUser);
-        msg.setContent(content);
-
-        AuctionMessage saved = auctionMessageRepository.save(msg);
-        ChatMessageResponse dto = toResponse(saved);
-
-        // WebSocket broadcast
-        TransactionSynchronizationManager.registerSynchronization(
-                new TransactionSynchronization() {
-                    @Override
-                    public void afterCommit() {
-                        messagingTemplate.convertAndSend(
-                                "/topic/auctions/" + auctionId + "/chat",
-                                dto
-                        );
-                    }
-                }
-        );
-
-        return dto;
-    }
 
     // Map AuctionMessage to dto
     private ChatMessageResponse toResponse(AuctionMessage m) {

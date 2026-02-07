@@ -16,6 +16,7 @@ import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.UserRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -27,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.*;
 
+import static com.example.webapp.BidNow.Configs.CacheConfig.AUCTIONS_DEFAULT_CACHE;
 import static com.example.webapp.BidNow.helpers.UserEntityHelper.getDominantRole;
 import static com.example.webapp.BidNow.helpers.UserEntityHelper.isRoleValid;
 
@@ -87,7 +89,9 @@ public class AdminUserEntityService {
      * @return , dto with the changes
      * @throws FirebaseAuthException
      */
+    //todo: remove firebaseId from method's parameters
     @Transactional
+    @CacheEvict(cacheNames = AUCTIONS_DEFAULT_CACHE, allEntries = true)
     public AdminUserEntityDto updateUser(String firebaseId, UserEntityUpdateAdmin userEntityUpdateAdmin) throws FirebaseAuthException {
 
 
@@ -98,6 +102,7 @@ public class AdminUserEntityService {
 
 
         // If admin pressed to anonymize user in database and delete user from firebase
+        // todo: make a func
         if (userEntityUpdateAdmin.isAnonymized()) {
 
             disableUserActions(userEntity);//Disable users active bids and auctions
@@ -110,7 +115,7 @@ public class AdminUserEntityService {
             userEntity.setAvatar(Avatar.DEFAULT);
             userEntity.setEligibleForChat(false);
             userEntityRepository.save(userEntity);
-            firebaseRetryService.deleteUserFromFirebase(firebaseId);
+            firebaseRetryService.deleteUserFromFirebase(firebaseId);// todo: delete in async thread
             return userEntityToDto(userEntity);
         }
 
@@ -213,7 +218,8 @@ public class AdminUserEntityService {
      */
     private void updateFromDtoToUserEntity(UserEntity user, UserEntityUpdateAdmin userEntityUpdateAdmin, Set<Role> roles) {
         if (userEntityUpdateAdmin.isBanned() && !user.getBanned())
-            disableUserActions(user);//Disable users active bids and auctions if user was banned by admin
+            //Disable users active bids and auctions if user was banned by admin
+            disableUserActions(user);// todo: move this in main service method
 
         user.setBanned(userEntityUpdateAdmin.isBanned());
 
@@ -221,7 +227,7 @@ public class AdminUserEntityService {
         Long newPoints = userEntityUpdateAdmin.rewardPoints();
 
         user.setRewardPoints(userEntityUpdateAdmin.rewardPoints());
-        // All time reward points increases only when rewardPoints increases (reductions do not decrease the all-time total)
+        // All-time reward points increases only when rewardPoints increases (reductions do not decrease the all-time total)
         user.setAllTimeRewardPoints((newPoints >  oldPoints) ? (user.getAllTimeRewardPoints() + newPoints - oldPoints) : user.getAllTimeRewardPoints() );// 50 , 50     125 , 125   ~   25,  50   ->    125, 150   -> 5
         user.setEmail(userEntityUpdateAdmin.email());
         user.setAnonymized(userEntityUpdateAdmin.isAnonymized());
@@ -258,14 +264,14 @@ public class AdminUserEntityService {
         // Disable user's bids
         for (Bid bid : bids) bid.setEnabled(false);
 
-        // Find auctions that user bid and inform in chat that user was disabled
+        // Notify Users that this user's bids were disabled //
+
+        // Find auctions that user bid
         List<Auction> auctionsWhereUserBid = auctionRepository.findDistinctByBids_Bidder_Id(userEntity.getId());
 
 
         // Find the auction's that user bided
         for (Auction auction : auctionsWhereUserBid){
-            // ToDo: maybe remove notification in chat
-            auctionChatService.sendUserDisabledSystemMessage(auction.getId(), userEntity.getId());
             // Notify every bidder in each auction that the disabled user bidded
             for(Bid bid : auction.getBids()){
                 eventPublisher.publishEvent(new NotificationEvent(bid.getBidder().getId(), NotificationType.BID_CANCELLED,"Bidder +" + bid.getBidder().getUsername() + "'s bids were cancelled",
@@ -283,10 +289,7 @@ public class AdminUserEntityService {
         if (!auctions.isEmpty()) {
             // Notify - send email to bidnow and auction participants for the disabling event of the user.
             for (Auction auction : auctions) {
-                if (auction.getEndDate().isAfter(LocalDateTime.now())) {
-                    if (auction.getStatus().equals(AuctionStatus.EXPIRED)) continue;
                     auction.setStatus(AuctionStatus.CANCELLED);
-                    //todo: check that the
 
                     // Send email to all participants that auctioneer x cancelled the auction
                     List<UserEntity> disabledUserAuctionBidders = bidRepository.findDistinctBiddersByAuctionId(auction.getId());
@@ -311,11 +314,8 @@ public class AdminUserEntityService {
                                 Best regards,
                                 BidNow Team
                                 """.formatted(
-                                // 1) Όνομα χρήστη (ή username/email, ό,τι έχεις διαθέσιμο)
                                 u.getUsername(),
-                                // 2) Τίτλος δημοπρασίας
                                 auction.getTitle(),
-                                // 3) Περιγραφή δημοπρασίας (fallback σε "-" αν είναι null)
                                 auction.getDescription() != null ? auction.getDescription() : "-"
                         );
 
@@ -332,7 +332,7 @@ public class AdminUserEntityService {
                         ) );
                     });
 
-                }
+
             }
         }
     }

@@ -129,9 +129,11 @@ public class AdminReferralCodeService {
      * Maps the admin DTO request to a ReferralCode entity response.
      */
     private ReferralCode updateReferralCodeFromDto(Long id, ReferralCodeRequest dto){
-        ReferralCode referralCode = referralCodeRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Referral code: " + id + " not found"));
+        ReferralCode referralCode = referralCodeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Referral code: " + id + " not found"));
 
-        if(!Objects.equals(referralCode.getOwner().getId(), dto.ownerId()))throw new IllegalArgumentException("Cannot change creator");
+        if(!Objects.equals(referralCode.getOwner().getId(), dto.ownerId()))
+            throw new IllegalArgumentException("Cannot change creator");
 
         referralCode.setCode(dto.code());
         referralCode.setMaxUses(dto.maxUses());

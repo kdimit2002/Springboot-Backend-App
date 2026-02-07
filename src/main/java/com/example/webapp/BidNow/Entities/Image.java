@@ -16,7 +16,6 @@ public class Image {
     @Column(length=512,unique=true,nullable = false)
     protected String url;
 
-    // Καλύτερα bytes για ακρίβεια (αν θες “σε MB” φτιάχνεις helper στο DTO)
     @Column(name = "size_bytes", nullable = false)
     private long sizeBytes;
 
@@ -143,4 +142,3 @@ public class Image {
 
 }
 
-//FINISHED

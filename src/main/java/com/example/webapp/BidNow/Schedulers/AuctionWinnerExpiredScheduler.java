@@ -1,4 +1,5 @@
 package com.example.webapp.BidNow.Schedulers;
+import com.example.webapp.BidNow.Configs.CacheConfig;
 import com.example.webapp.BidNow.Dtos.EmailEvent;
 import com.example.webapp.BidNow.Dtos.NotificationEvent;
 import com.example.webapp.BidNow.Entities.Auction;
@@ -13,10 +14,14 @@ import com.example.webapp.BidNow.Repositories.ReferralCodeUsageRepository;
 import com.example.webapp.BidNow.Services.EmailService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -32,12 +37,14 @@ public class AuctionWinnerExpiredScheduler {
 
     private final BidRepository bidRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final CacheManager cacheManager;
 
     private final AuctionRepository auctionRepository;
 
-    public AuctionWinnerExpiredScheduler(BidRepository bidRepository, ApplicationEventPublisher eventPublisher, AuctionRepository auctionRepository) {
+    public AuctionWinnerExpiredScheduler(BidRepository bidRepository, ApplicationEventPublisher eventPublisher, CacheManager cacheManager, AuctionRepository auctionRepository) {
         this.bidRepository = bidRepository;
         this.eventPublisher = eventPublisher;
+        this.cacheManager = cacheManager;
         this.auctionRepository = auctionRepository;
     }
 
@@ -64,6 +71,17 @@ public class AuctionWinnerExpiredScheduler {
                 auctionRepository.findByStatusAndEndDateBefore(AuctionStatus.ACTIVE, now);
 
         if (toExpire.isEmpty()) return;
+
+        // Clear default list cache AFTER COMMIT (ώστε το επόμενο read να ξαναφορτώσει σωστά)
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                Cache cache = cacheManager.getCache(CacheConfig.AUCTIONS_DEFAULT_CACHE);
+                if (cache != null) {
+                    cache.clear();
+                }
+            }
+        });
 
         log.info("Found {} auctions to expire", toExpire.size());
 

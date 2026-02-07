@@ -4,6 +4,7 @@ import com.example.webapp.BidNow.Dtos.ReferralCodeDtoAdminResponse;
 import com.example.webapp.BidNow.Dtos.ReferralCodeRequest;
 import com.example.webapp.BidNow.Services.AdminReferralCodeService;
 import com.example.webapp.BidNow.Services.AdminUserEntityService;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
@@ -71,11 +72,15 @@ public class AdminReferralCodeController {
      *
      * POST /api/admin/createReferralCode
      *
+     * Notes:
+     *  - ReferralCode's code must be unique
+     *  - ReferralCode's owner must be unique
+     *
      * @param referralCodeRequest request payload (e.g. code, metadata)
      * @return created referral code in a small response object
      */
     @PostMapping(value = "/createReferralCode")
-    public ResponseEntity<ReferralCodeResponse> createReferralCode(@RequestBody ReferralCodeRequest referralCodeRequest){
+    public ResponseEntity<ReferralCodeResponse> createReferralCode(@Valid @RequestBody ReferralCodeRequest referralCodeRequest){
         adminReferralCodeService.createReferralCode(referralCodeRequest);
         return ResponseEntity.ok(new ReferralCodeResponse(referralCodeRequest.code()));
     }

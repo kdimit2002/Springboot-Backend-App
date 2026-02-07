@@ -12,12 +12,6 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 
-/**
- * @Author Kendeas
- */
-//ToDo: location of user or acs courier
-// ToDo: prepi na exoume lista me dimoprasies pou dimiourgisan oi
-// auctioneers ke lista me afta pou ependisan bidders (telefteous 3 mines px)
 @Entity
 @Table(name="users")
 @NoArgsConstructor
@@ -36,7 +30,6 @@ public class UserEntity {
     @Column(name="name", length=40,unique=true)
     private String username;
 
-//    //ToDo: mandatory in role auctioneer?
 //    // Check data type,implementation
 //    @Column(name="facebook_account", length=100,unique=true)
 //    private String facebookAccount;
@@ -45,9 +38,6 @@ public class UserEntity {
     @NotBlank
     @Column(name="email", length=60,unique=true)
     private String email;
-
-    //ToDo: firbase auth (frontend)
-    //ToDo: mandatory se role auctioneer
 
     @NotBlank
     @Column(name = "phone_number",length=50,unique=true,nullable = false)
@@ -67,24 +57,13 @@ public class UserEntity {
     @Column(name = "all_time_reward_points")
     private Long allTimeRewardPoints = 0L;
 
-
-//    @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)//ToDo:check for orphan removal
-//    @JoinColumn(name = "photo_id")
-//    private UserPhoto userPhoto;
-
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Avatar avatar;
 
-//
-//    @Column(name = "firebase_compatible")
-//    private boolean isFirebaseCompatible;
 
-
-    // We dont usually want to have auction list. Only when user wants to see it.
-    // List because maybe we will want to add filters
-    // mporo na figo to orhanremoval ke apla na kano null to foreign tou auction
-    @OneToMany(mappedBy = "owner",fetch = FetchType.LAZY,orphanRemoval = true)
+    // We don't usually want to have auction list. Only when user wants to see it.
+    @OneToMany(mappedBy = "owner",fetch = FetchType.LAZY)
     @JsonManagedReference
     private List<Auction> auctionList = new ArrayList<>();
 
@@ -109,9 +88,10 @@ public class UserEntity {
         this.isBanned = false; // false by default
         this.roles = new HashSet<>(roles);
     }
+    public UserEntity(){}
 
 
-    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL,fetch = FetchType.LAZY)
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
     private Location location;
 
 
@@ -292,7 +272,6 @@ public class UserEntity {
      */
     @PreUpdate
     public void onUpdate(){
-      // ToDo: check for  this.isFirebaseCompatible = false;
         this.updatedAt = LocalDateTime.now();
         var ctx = SecurityContextHolder.getContext();
         var auth = (ctx != null) ? ctx.getAuthentication() : null;

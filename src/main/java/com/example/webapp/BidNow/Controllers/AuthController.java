@@ -68,7 +68,7 @@ public class AuthController {
      */
     @PostMapping(value = "/signup")
     public ResponseEntity<AuthUserDto> registerUser(@Valid @RequestBody SignUpRequest signUpRequest) throws IOException, FirebaseAuthException {
-        LocationDto location = signUpRequest.locationDto();
+        LocationDto location = signUpRequest.locationDto(); // todo: logic must be removed from here
         String country = lowerExceptFirst(location.country());
         if(!country.equals("Cyprus"))throw new IllegalArgumentException("Country must be Cyprus");// Clients must in Cyprus
         Avatar userAvatar = signUpRequest.avatar();

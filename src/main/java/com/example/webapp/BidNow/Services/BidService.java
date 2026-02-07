@@ -24,6 +24,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 
+import static com.example.webapp.BidNow.Configs.CacheConfig.AUCTIONS_DEFAULT_CACHE;
 import static com.example.webapp.BidNow.helpers.UserEntityHelper.getUserFirebaseId;
 
 /**
@@ -69,7 +70,7 @@ public class BidService {
      * - Publishes notifications as events
      * - Sends a WebSocket update AFTER_COMMIT so clients see only committed data.
      */
-    @CacheEvict(cacheNames = "auctionById", key = "#auctionId")
+    @CacheEvict(cacheNames = AUCTIONS_DEFAULT_CACHE, allEntries = true)
     @Transactional
     public BidEventDto placeBid(Long auctionId, String firebaseId, BigDecimal amount) {
 
@@ -128,13 +129,8 @@ public class BidService {
         }
 
         // Extra safety check on time window.
-        if (secondsUntilEnd <= 0) {
+        if (secondsUntilEnd <= 1) {
             throw new IllegalArgumentException("The auction has finished");
-        }
-
-        // Anti-sniping rule: disallow bids in the last 2 seconds.
-        if (secondsUntilEnd <= 2) {
-            throw new IllegalArgumentException("You cannot place a bid in the last 2 seconds of the auction");
         }
 
         // If bid arrives in the last minute, extend so there is always at least 60 seconds remaining.

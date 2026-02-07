@@ -6,19 +6,22 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "referral_code_usage")
+@Table(
+        name = "referral_code_usage",
+        uniqueConstraints = @UniqueConstraint(columnNames = "user_id")
+)
 public class ReferralCodeUsage {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // ο χρήστης που ΧΡΗΣΙΜΟΠΟΙΗΣΕ τον κωδικό
+    // User that used the code
     @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)
     private UserEntity user;
 
-    // ο κωδικός που χρησιμοποιήθηκε
+    // Code that was used
     @ManyToOne
     @JoinColumn(name = "referral_code_id", nullable = false)
     private ReferralCode referralCode;

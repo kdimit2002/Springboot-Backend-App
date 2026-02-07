@@ -1,6 +1,7 @@
 package com.example.webapp.BidNow.Dtos;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 
 /**
@@ -10,6 +11,7 @@ import jakarta.validation.constraints.NotBlank;
  *
  */
 public class ChatMessageRequest {
+    @Size(min = 0,max =500 )
     @NotBlank(message = "You cannot send blank or empty message")
     private String content;
 

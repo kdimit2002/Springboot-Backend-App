@@ -28,7 +28,7 @@ public class Auction {
     private Long id;
 
     @ManyToOne
-    @JoinColumn(name = "category_id")
+    @JoinColumn(name = "category_id", nullable = false)
     private Category category;
 
     @Enumerated(EnumType.STRING)
@@ -251,4 +251,7 @@ public class Auction {
         this.modifiedBy = (auth != null) ? auth.getName() : "system";
     }
 
+    public void setId(Long id) {
+        this.id = id;
+    }
 }
