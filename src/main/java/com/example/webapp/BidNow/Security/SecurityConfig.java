@@ -58,7 +58,8 @@ public class SecurityConfig {
                                 // Public auth helper endpoints
                                 "/api/auth/username-availability**",
                                 "/api/auth/username-availability",
-                                "/api/auth/user-availability"
+                                "/api/auth/user-availability",
+                                "/auth/token"
                         ).permitAll()
                          // WebSocket handshake endpoint (this endpoint is invoked inside rest apis)
                         .requestMatchers("/ws", "/ws/**").permitAll()

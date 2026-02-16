@@ -30,15 +30,12 @@ import java.util.Map;
 @Service
 public class NightlyConsistencyScheduler {
 
-    //  TODO: POLI SIAMNTIKO NA DIXNI ASINEPIES SE USERNAME ELEXI AN
-    //   KAPIOI USER EXOUN IDIO SE FIREBASE I DATABASE KE ALLAZI TO 1 KATA ENA GRAMMA
-
     private static final Logger log = LoggerFactory.getLogger(NightlyConsistencyScheduler.class);
     private final AdminUserEntityService adminUserEntityService;
     private final AnonymizeUserService anonymizeUserService;
     private final UserEntityRepository userRepository;
     private final FirebaseAuth firebaseAuth;
-    private int executedToday = 0; // για να μην τρέχει πολλές φορές το ίδιο βράδυ
+    private int executedToday = 0; // For checking if it runs once then don't retry
     private final EmailService emailService;
     private final DatabaseRetryService databaseRetryService;
     private final FirebaseRetryService firebaseRetryService;
@@ -46,7 +43,7 @@ public class NightlyConsistencyScheduler {
 
 
 
-    //todo: prepiiparxi pithanotita user na ine sto forebase me diaforetiko firebase id apo database prepi na gini elexos
+    //todo: Check if there is a chance a user has differnet firebase id in firebase than database
 
     public NightlyConsistencyScheduler(AdminUserEntityService adminUserEntityService, AnonymizeUserService anonymizeUserService, UserEntityRepository userRepository, FirebaseAuth firebaseAuth, EmailService emailService, DatabaseRetryService databaseRetryService, FirebaseRetryService firebaseRetryService, RoleRepository roleRepository) {
         this.adminUserEntityService = adminUserEntityService;
@@ -59,17 +56,17 @@ public class NightlyConsistencyScheduler {
         this.roleRepository = roleRepository;
     }
 
-    @Scheduled(cron = "0 */10 * * * *") // κάθε 10 λεπτά
+    @Scheduled(cron = "0 */10 * * * *") // every 10 minutes
     public void scheduledNightlyCheck() {
         LocalTime now = LocalTime.now();
         int hour = now.getHour();
         boolean execute = true;
 
-        // Έλεγχος αν είμαστε στο “παράθυρο ησυχίας”
+        // Checking if we are in the low load time window (1am to 5am)
         if (hour >= 1 && hour <= 5 && executedToday<5) {
             double load = getSystemLoad();
-            if (load < 0.6) {//ToDO: calculate actual load
-                log.info("Low load ({}) — running consistency check...", load);//todo:cleanuo this logs once every 3 -7 days
+            if (load < 0.7) {//ToDO: calculate actual load, maybe remove this
+                log.info("Low load ({}) — running consistency check...", load);//todo: cleanup this logs once every 3 -7 days
                 emailService.sendSimpleEmailAsync(
                                 "bidnowapp@gmail.com",
                         "The nightly scheduler started",
@@ -98,7 +95,7 @@ public class NightlyConsistencyScheduler {
         }
 
 
-        // Reset flag κάθε μέρα στις 00:00
+        // Reset flag every day at 00:00
         if (hour == 0 && LocalTime.now().getMinute() < 31) {
             executedToday = 0;
             log.info("Resetting nightly scheduler execution counter.");
@@ -118,17 +115,19 @@ public class NightlyConsistencyScheduler {
     private void performCheckFetchingDatabaseUsers() {
         log.info("Performing check from scheduler");
         var users = userRepository.findAll();
+        // cutoff for checking if a user was created more than 10 minutes before
         LocalDateTime cutoff = LocalDateTime.now().minusMinutes(10);
 
         for (var user : users) {
             try {
 
+                // Skip records of users that was created in less than 10 minutes
                 if (user.getCreatedAt().isAfter(cutoff)) {
-                    // πολύ νέος, άστον για την επόμενη φορά
                     continue;
                 }
 
 
+                // Find the related firebase user record
                 var firebaseUserId = firebaseAuth.getUser(user.getFirebaseId());
 
 
@@ -136,7 +135,7 @@ public class NightlyConsistencyScheduler {
                 boolean firebaseHasClaims = customClaims != null && customClaims.containsKey("roles");
                 boolean dbHasRoles = !user.getRoles().isEmpty();
 
-                // Case 1: DB έχει roles → Firebase ΔΕΝ έχει → φτιάξε Firebase
+                // Case 1: if user has roles in db apply them also in firebase(claims in firebase are never user, but we want to keep consistency)
                 if (dbHasRoles && !firebaseHasClaims) {
                     List<String> roleNames = user.getRoles()
                             .stream()
@@ -145,37 +144,24 @@ public class NightlyConsistencyScheduler {
 
                     Map<String, Object> claims = Map.of("roles", roleNames);
                     firebaseAuth.setCustomUserClaims(user.getFirebaseId(), claims);
-                    emailService.sendSimpleEmailAsync(
-                            "bidnowapp@gmail.com",
-                            "⚠️ Consistency Fix Applied: Firebase Missing Claims",
-                            "The nightly consistency scheduler detected a mismatch:\n\n" +
-                                    "➡ Database contains roles for user:\n" +
-                                    "   Firebase ID: " + user.getFirebaseId() + "\n" +
-                                    "   DB Roles: " + roleNames.toString() + "\n\n" +
-                                    "❗ Firebase had NO custom claims for this user.\n\n" +
-                                    "✔ Action: Firebase custom claims were updated to match the database roles.\n" +
-                                    "No further action is required unless this issue repeats frequently."
-                    );
-
                 }
-                // Case 2: Firebase έχει roles → DB ΔΕΝ έχει → fix DB (όχι Firebase)
+                // Case 2: This case is almost impossible, we have to research if flow goes here
                 else if (!dbHasRoles && firebaseHasClaims) {
                     @SuppressWarnings("unchecked")
                     List<String> firebaseRoles = (List<String>) customClaims.get("roles");
 
-                    var roleSet = new HashSet<>(roleRepository.findByNameIn(firebaseRoles));
-                    user.setRoles(roleSet);
+                    // var roleSet = new HashSet<>(roleRepository.findByNameIn(firebaseRoles));
+                    // user.setRoles(roleSet);
                     userRepository.save(user);
                     emailService.sendSimpleEmailAsync(
                             "bidnowapp@gmail.com",
-                            "⚠️ Critical Consistency Fix: Missing Roles in Database",
+                            "⚠️ Critical Consistency: Missing Roles in Database",
                             "The nightly consistency scheduler detected a critical mismatch:\n\n" +
                                     "➡ Firebase has custom role claims for user:\n" +
                                     "   Firebase ID: " + user.getFirebaseId() + "\n" +
                                     "   Firebase Roles: " + firebaseRoles.toString() + "\n\n" +
                                     "❗ Database had NO roles assigned for this user.\n\n" +
-                                    "✔ Action: The database roles were restored using the Firebase roles.\n\n" +
-                                    "Please review this user to ensure the fix was appropriate."
+                                    " ❗❗❗ WARNING: ❗❗❗  Please review as this is almost impossible to happen. Please DO your research"
                     );
                 }
 
@@ -215,7 +201,7 @@ public class NightlyConsistencyScheduler {
                     anonymizeUserService.handleDbUserAnonymize(user);
 
                 } else {
-                    // Άλλο error → ενημέρωσε admin
+                    // Different error please research
                     log.error("Unexpected Firebase error while checking user {}",
                             user.getFirebaseId(), ex);
 
@@ -257,19 +243,20 @@ public class NightlyConsistencyScheduler {
 
 
 
-//If a user deletes himself in firebase we must store him in ours in order to not delete and then create again accounts
-// So no check for users not in firebase but in database
+    // If a user deletes himself in firebase we must store him in ours in order to not delete and then create again accounts
+    // So no check for users not in firebase but in database
     private void performCheckFetchingFirebaseUsers() {
         try {
-            // Ξεκίνα να φέρνεις χρήστες
+            // Start fetching users
             ListUsersPage page = firebaseAuth.listUsers(null);
 
             while (page != null) {
+                // Get a set of users
                 for (ExportedUserRecord user : page.getValues()) {
                     String userFirebaseId = user.getUid();
-                    //Iparxi stin firebase oxi stin database diegrapse apo firebase
+                    // If a user exists in firebase but not in database -> delete user from firebase
                     if(!userRepository.existsByFirebaseId(userFirebaseId)){
-                        emailService.sendSimpleEmailAsync(
+                        emailService.sendSimpleEmailAsync( // todo: some of these emails must be changed to be after commit
                                 "bidnowapp@gmail.com",
                                 "Inconsistent Firebase User",
                                 "A Firebase user record was found without a matching database entry.\n\n" +
@@ -293,8 +280,8 @@ public class NightlyConsistencyScheduler {
                     }
                     UserEntity userEntity= userRepository.findByFirebaseId(userFirebaseId).orElseThrow(() -> new ResourceNotFoundException("Scheduler exception user not found"));//todo: this should never be executed
 
-                    // if user is disable in firebase and not in database
-                    if (user.isDisabled() && !userEntity.getBanned()) {
+                    // if user is disabled in firebase and not in database
+                    if (user.isDisabled() && !userEntity.getBanned()) { // todo: review this too, also the opposite is more important
                         log.warn("Inconsistency detected: Firebase disabled user but in DB not banned. Fixing... {}", user.getUid());
                         userEntity.setBanned(true);
                         userRepository.save(userEntity);
@@ -309,7 +296,7 @@ public class NightlyConsistencyScheduler {
                         );
                     }
                 }
-                // Επόμενη σελίδα, αν υπάρχει
+                // Get the next set of users from firebase
                 page = page.getNextPage();
             }
 

@@ -277,13 +277,8 @@ public class AuthController {
     }
 
 
-    public record TokenDto(String token){}
 
-    @GetMapping(value = "/getRefreshToken")
-    public ResponseEntity<TokenDto> refreshToken(@RequestParam String username) throws FirebaseAuthException {
-      String token = userEntityService.refreshToken();
-      return ResponseEntity.ok(new TokenDto(token));
-    }
+
 
 
 }
