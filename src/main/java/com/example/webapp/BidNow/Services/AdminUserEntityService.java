@@ -107,6 +107,7 @@ public class AdminUserEntityService {
 
             disableUserActions(userEntity);//Disable users active bids and auctions
 
+            //todo delete location row
             userEntity.setUsername("deleted_user_" + userEntity.getId());
             userEntity.setEmail("anonymized_" + userEntity.getId() + "@example.com");
             userEntity.setAnonymized(true);
@@ -357,7 +358,7 @@ public class AdminUserEntityService {
      * @param userEntity
      * @return
      */
-    private AdminUserEntityDto userEntityToDto(UserEntity userEntity) {
+    public AdminUserEntityDto userEntityToDto(UserEntity userEntity) {
         if (userEntity.getRoles() == null || userEntity.getRoles().isEmpty()) {// Good to check if user doesn't have a role
             log.error("User {} doesn't have a role something is wrong", userEntity.getFirebaseId());
             eventPublisher.publishEvent(new EmailEvent(

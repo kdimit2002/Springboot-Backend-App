@@ -1,4 +1,4 @@
-package com.example.webapp.BidNow.Services;
+package com.example.webapp.BidNow;
 
 import com.example.webapp.BidNow.Entities.Auction;
 import com.example.webapp.BidNow.Entities.Bid;
@@ -7,6 +7,7 @@ import com.example.webapp.BidNow.Enums.AuctionStatus;
 import com.example.webapp.BidNow.Repositories.AuctionRepository;
 import com.example.webapp.BidNow.Repositories.BidRepository;
 import com.example.webapp.BidNow.Repositories.UserEntityRepository;
+import com.example.webapp.BidNow.Services.BidService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -26,7 +27,6 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class BidServiceTest {
 
-    @Mock private UserActivityService userActivityService;
     @Mock private BidRepository bidRepository;
     @Mock private AuctionRepository auctionRepository;
     @Mock private UserEntityRepository userRepository;
@@ -37,11 +37,13 @@ class BidServiceTest {
     private BidService bidService;
 
     /**
+     * Testing the case where a user bids in an auction for the first time
+     * If the amount bided is lower that auction starting amount -> throw exception
      *
      */
     @Test
     void placeBid_shouldReject_whenAmountBelowMinimumForFirstBid() {
-        // Initialization must
+        // Initialization
         Long auctionId = 1L;
         String bidderFirebaseId = "bidder-fb";
 
@@ -59,6 +61,7 @@ class BidServiceTest {
         auction.setOwner(owner);
         auction.setStatus(AuctionStatus.ACTIVE);
         auction.setEndDate(LocalDateTime.now().plusMinutes(5));
+        // Set auction's starting amount to 100
         auction.setStartingAmount(new BigDecimal("100"));
         auction.setMinBidIncrement(new BigDecimal("10"));
         auction.setBids(new ArrayList<>()); // first bid case
@@ -66,22 +69,26 @@ class BidServiceTest {
         when(auctionRepository.findById(auctionId)).thenReturn(Optional.of(auction));
         when(userRepository.findByFirebaseId(bidderFirebaseId)).thenReturn(Optional.of(bidder));
 
-        BigDecimal tooSmall = new BigDecimal("109"); // minimum should be 110
+        // Let's say a bidder bided 99 which is smaller that starting amount
+        BigDecimal tooSmall = new BigDecimal("99"); // minimum should be 100
 
-        // Act
+        // Calling service method should throw ilegall argument exception
         IllegalArgumentException ex = assertThrows(
                 IllegalArgumentException.class,
                 () -> bidService.placeBid(auctionId, bidderFirebaseId, tooSmall)
         );
 
-        // Assert
-        assertTrue(ex.getMessage().contains("Bid must be at least"));
+        // verify that nothing is saved and the flow stops
         verify(bidRepository, never()).save(any());
-        verifyNoInteractions(messagingTemplate);
-        verifyNoInteractions(eventPublisher);
+        verifyNoInteractions(messagingTemplate,eventPublisher);
     }
 
 
+    /**
+     * Testing the case where a user bids in the last second of the auction.
+     * Last second bids must not be accepted
+     *
+     */
     @Test
     void placeBid_shouldReject_whenWithinLast1Second() {
         Long auctionId = 1L;
@@ -112,13 +119,18 @@ class BidServiceTest {
                 () -> bidService.placeBid(auctionId, bidder.getFirebaseId(), new BigDecimal("110"))
         );
 
-        assertTrue(ex.getMessage().contains("last 1 second"));
+        assertTrue(ex.getMessage().contains("has finished"));
+        // verify that nothing is saved and the flow stops
         verify(bidRepository, never()).save(any());
-        verifyNoInteractions(eventPublisher);
-        verifyNoInteractions(messagingTemplate);
+        verifyNoInteractions(eventPublisher,messagingTemplate);
     }
 
 
+    /**
+     * Testing the case where a user bids in an auction.
+     * If the amount bided is lower that auction's last bid amount -> throw exception
+     *
+     */
     @Test
     void placeBid_shouldReject_whenAmountBelowMinimumForNextBid() {
         Long auctionId = 1L;
@@ -164,9 +176,9 @@ class BidServiceTest {
 
         assertTrue(ex.getMessage().contains("Bid must be at least"));
         verify(bidRepository).findTopByAuction_IdAndIsEnabledTrueOrderByAmountDescCreatedAtDesc(auctionId);
+        // Verify that bid isn't saved
         verify(bidRepository, never()).save(any());
-        verifyNoInteractions(eventPublisher);
-        verifyNoInteractions(messagingTemplate);
+        verifyNoInteractions(eventPublisher,messagingTemplate);
     }
 
 

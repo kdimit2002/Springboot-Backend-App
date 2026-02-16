@@ -111,9 +111,9 @@ public class BidService {
         BigDecimal minimumAllowed;
 
         if (auction.getBids().isEmpty()) {
-            minimumAllowed = auction.getStartingAmount().add(minInc);
+            minimumAllowed = auction.getStartingAmount();
         } else {
-            // Use repository to get the true highest bid (safer than relying on in-memory ordering).
+            // Use repository to get the current highest bid
             prevHighest = bidRepository
                     .findTopByAuction_IdAndIsEnabledTrueOrderByAmountDescCreatedAtDesc(auctionId)
                     .orElseThrow(() -> new ResourceNotFoundException("Bid not found"));

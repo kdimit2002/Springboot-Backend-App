@@ -15,8 +15,6 @@ import java.util.Collection;
  *  - Bidder
  */
 @Entity
-@NoArgsConstructor
-@AllArgsConstructor
 @Table(name = "roles")
 public class Role {
 

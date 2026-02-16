@@ -14,8 +14,6 @@ import java.util.*;
 
 @Entity
 @Table(name="users")
-@NoArgsConstructor
-@AllArgsConstructor
 public class UserEntity {
 
 
@@ -30,9 +28,6 @@ public class UserEntity {
     @Column(name="name", length=40,unique=true)
     private String username;
 
-//    // Check data type,implementation
-//    @Column(name="facebook_account", length=100,unique=true)
-//    private String facebookAccount;
 
     @Email
     @NotBlank

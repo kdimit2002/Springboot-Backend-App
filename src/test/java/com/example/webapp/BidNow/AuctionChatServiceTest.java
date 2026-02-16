@@ -17,6 +17,8 @@ import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -38,8 +40,6 @@ class AuctionChatServiceTest {
     @Mock private AuctionMessageRepository auctionMessageRepository;
     @Mock private UserActivityService userActivityService;
 
-    // αυτά υπάρχουν στο service σου, δεν τα ελέγχουμε εδώ
-    @Mock private SimpMessagingTemplate messagingTemplate;
 
     @Spy
     @InjectMocks
@@ -70,7 +70,7 @@ class AuctionChatServiceTest {
         assertNotNull(ex.getReason());
         assertTrue(ex.getReason().toLowerCase().contains("empty"));
 
-        verifyNoMoreInteractions();
+        verifyNoInteractions(userActivityService,auctionMessageRepository,bidRepository,auctionRepository,userEntityRepository);
     }
 
 
@@ -93,8 +93,7 @@ class AuctionChatServiceTest {
 
         // Mock sender user entity
         UserEntity sender = mock(UserEntity.class);
-        // Only user id and firebase id is needed here
-        when(sender.getId()).thenReturn(10L);
+        // Only user firebase id is needed here
         when(userEntityRepository.findByFirebaseId("fb_sender")).thenReturn(Optional.of(sender));
 
         // Mock an expired auction to ensure that the service method throws exception
@@ -107,7 +106,7 @@ class AuctionChatServiceTest {
                 () -> auctionChatService.sendMessage(1L, req));
 
         assertStatus(ex, HttpStatus.BAD_REQUEST);
-        verifyNoMoreInteractions();
+        verifyNoInteractions(auctionMessageRepository);
         SecurityContextHolder.clearContext();
 
     }
@@ -129,16 +128,12 @@ class AuctionChatServiceTest {
         ctx.setAuthentication(auth);
         SecurityContextHolder.setContext(ctx);
 
-// run test...
-
-
 
         // Mock sender user entity
         UserEntity sender = mock(UserEntity.class);
 
         // Only user id and firebase id is needed here
         when(sender.getId()).thenReturn(10L);
-        when(sender.getFirebaseId()).thenReturn("fb_sender");
         when(userEntityRepository.findByFirebaseId("fb_sender")).thenReturn(Optional.of(sender));
 
         // Auction must be active now
@@ -172,70 +167,79 @@ class AuctionChatServiceTest {
      */
     @Test
     void sendMessage_whenValid_shouldSaveMessage_andReturnDtoWithRemaining() {
-        ChatMessageRequest req = new ChatMessageRequest();
-        req.setContent("  hi there  ");
+        try (MockedStatic<TransactionSynchronizationManager> mockedStatic = mockStatic(TransactionSynchronizationManager.class)) {
 
-        // Mock a firebaseId for the user
-        Authentication auth = mock(Authentication.class);
-        when(auth.getName()).thenReturn("fb_sender");
+            ChatMessageRequest req = new ChatMessageRequest();
+            req.setContent("  hi there  ");
 
-        var ctx = SecurityContextHolder.createEmptyContext();
-        ctx.setAuthentication(auth);
-        SecurityContextHolder.setContext(ctx);
+            // Mock a firebaseId for the user
+            Authentication auth = mock(Authentication.class);
+            when(auth.getName()).thenReturn("fb_sender");
 
-        // real-ish sender fields for toResponse() method
-        UserEntity sender = mock(UserEntity.class);
-        when(sender.getId()).thenReturn(10L);
-        when(sender.getFirebaseId()).thenReturn("fb_sender");
-        when(sender.getUsername()).thenReturn("senderName");
-        when(userEntityRepository.findByFirebaseId("fb_sender")).thenReturn(Optional.of(sender));
+            var ctx = SecurityContextHolder.createEmptyContext();
+            ctx.setAuthentication(auth);
+            SecurityContextHolder.setContext(ctx);
 
-        Auction auction = mock(Auction.class);
-        when(auction.getEndDate()).thenReturn(LocalDateTime.now().plusDays(1));
-        when(auctionRepository.findById(1L)).thenReturn(Optional.of(auction));
+            // real-ish sender fields for toResponse() method
+            UserEntity sender = mock(UserEntity.class);
+            when(sender.getId()).thenReturn(10L);
+            when(sender.getFirebaseId()).thenReturn("fb_sender");
+            when(sender.getUsername()).thenReturn("senderName");
+            when(userEntityRepository.findByFirebaseId("fb_sender")).thenReturn(Optional.of(sender));
 
-        // Even with one of the three requirements as true the message should be sent
-        // todo: this must be changed d in future because admin might disable user's eligibility for chat
+            Auction auction = mock(Auction.class);
+            when(auction.getEndDate()).thenReturn(LocalDateTime.now().plusDays(1));
+            when(auctionRepository.findById(1L)).thenReturn(Optional.of(auction));
 
-        when(bidRepository.existsByAuctionIdAndBidderId(1L, 10L)).thenReturn(true);
-        when(auctionRepository.existsByOwner_Id(10L)).thenReturn(false);
-        when(auctionRepository.existsByWinner_Id(10L)).thenReturn(false);
+            // Even with one of the three requirements as true the message should be sent
+            // todo: this must be changed in future because admin might disable user's eligibility for chat
 
-        // rate limit counter (must be lower than 25)
-        when(auctionMessageRepository.countByAuctionIdAndSenderId(1L, 10L)).thenReturn(3L);
+            when(bidRepository.existsByAuctionIdAndBidderId(1L, 10L)).thenReturn(true);
+            when(auctionRepository.existsByOwner_Id(10L)).thenReturn(false);
+            when(auctionRepository.existsByWinner_Id(10L)).thenReturn(false);
 
-        // For capturing argument returned when saving auction message
-        ArgumentCaptor<AuctionMessage> msgCaptor = ArgumentCaptor.forClass(AuctionMessage.class);
+            // rate limit counter (must be lower than 25)
+            when(auctionMessageRepository.countByAuctionIdAndSenderId(1L, 10L)).thenReturn(3L);
+
+            // For capturing argument returned when saving auction message
+            ArgumentCaptor<AuctionMessage> msgCaptor = ArgumentCaptor.forClass(AuctionMessage.class);
 
 
-        AuctionMessage saved = mock(AuctionMessage.class);
-        when(saved.getId()).thenReturn(55L);
-        when(saved.getContent()).thenReturn("hi there");
-        when(saved.getCreatedAt()).thenReturn(LocalDateTime.now());
-        when(saved.getSender()).thenReturn(sender);
+            AuctionMessage saved = mock(AuctionMessage.class);
+            when(saved.getId()).thenReturn(55L);
+            when(saved.getContent()).thenReturn("hi there");
+            when(saved.getCreatedAt()).thenReturn(LocalDateTime.now());
+            when(saved.getSender()).thenReturn(sender);
 
-        when(auctionMessageRepository.save(msgCaptor.capture())).thenReturn(saved);
+            when(auctionMessageRepository.save(msgCaptor.capture())).thenReturn(saved);
 
-        ChatMessageResponse out = auctionChatService.sendMessage(1L, req);
+            ArgumentCaptor<TransactionSynchronization> captor = ArgumentCaptor.forClass(TransactionSynchronization.class);
 
-        // assert save content trimmed and other parameters are correct
-        AuctionMessage toSave = msgCaptor.getValue();
-        assertEquals("hi there", toSave.getContent());
-        assertEquals(sender, toSave.getSender());
-        assertEquals(auction, toSave.getAuction());
 
-        // assert response dto
-        assertNotNull(out);
-        assertEquals(55L, out.getId());
-        assertEquals("hi there", out.getContent());
-        assertEquals("fb_sender", out.getSenderFirebaseId());
-        assertEquals("senderName", out.getSenderDisplayName());
-        // remaining messages counter is incremented
-        assertEquals(25 - (int)(3L + 1), out.getRemainingMessages()); // 21
+            ChatMessageResponse out = auctionChatService.sendMessage(1L, req);
 
-        // Logging method is called
-        verify(userActivityService).saveUserActivityAsync(Endpoint.SEND_MESSAGE, contains("sent message"));
-        SecurityContextHolder.clearContext();
+            // assert save content trimmed and other parameters are correct
+            AuctionMessage toSave = msgCaptor.getValue();
+            assertEquals("hi there", toSave.getContent());
+            assertEquals(sender, toSave.getSender());
+            assertEquals(auction, toSave.getAuction());
 
+            // assert response dto
+            assertNotNull(out);
+            assertEquals(55L, out.getId());
+            assertEquals("hi there", out.getContent());
+            assertEquals("fb_sender", out.getSenderFirebaseId());
+            assertEquals("senderName", out.getSenderDisplayName());
+            // remaining messages counter is incremented
+            assertEquals(25 - (int) (3L + 1), out.getRemainingMessages()); // 21
+
+            // Logging method is called
+            verify(userActivityService).saveUserActivityAsync(eq(Endpoint.SEND_MESSAGE), contains("sent message"));
+            SecurityContextHolder.clearContext();
+            // Verification that transaction synchronization is called
+            mockedStatic.verify(() ->
+                    TransactionSynchronizationManager.registerSynchronization(any(TransactionSynchronization.class))
+            );
+        }
     }
 }

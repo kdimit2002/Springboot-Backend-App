@@ -1,10 +1,7 @@
 package com.example.webapp.BidNow;
 
 import com.example.webapp.BidNow.Dtos.*;
-import com.example.webapp.BidNow.Entities.Auction;
-import com.example.webapp.BidNow.Entities.Bid;
-import com.example.webapp.BidNow.Entities.Role;
-import com.example.webapp.BidNow.Entities.UserEntity;
+import com.example.webapp.BidNow.Entities.*;
 import com.example.webapp.BidNow.Enums.AuctionStatus;
 import com.example.webapp.BidNow.Enums.Avatar;
 import com.example.webapp.BidNow.Repositories.*;
@@ -41,22 +38,18 @@ class AdminUserServiceTest {
     // Mocking the repositories to avoid real database calls
 
     // Used when anonymizing user
-    @Mock
-    private UserEntityRepository userEntityRepository;
-    @Mock
-    private FirebaseRetryService firebaseRetryService;
+    @Mock private UserEntityRepository userEntityRepository;
+    @Mock private FirebaseRetryService firebaseRetryService;
 
 
     // Used when calling disableUserAuctions method
-    @Mock
-    private BidRepository bidRepository;
-    @Mock
-    private AuctionRepository auctionRepository;
-    @Mock
-    private AuctionChatService auctionChatService;
-    @Mock
-    private ApplicationEventPublisher eventPublisher;
+    @Mock private BidRepository bidRepository;
+    @Mock private AuctionRepository auctionRepository;
+    @Mock private ReferralCodeRepository referralCodeRepository;
+    @Mock private AuctionChatService auctionChatService;
+    @Mock private ApplicationEventPublisher eventPublisher;
 
+    @Mock private  ReferralCodeUsageRepository referralCodeUsageRepository;
 
     // Inject our admin service for managing users to be tested
     @Spy
@@ -70,6 +63,8 @@ class AdminUserServiceTest {
 
     private static UserEntity user(long id, String firebaseId) {
         UserEntity u = new UserEntity();
+        Location location = new Location();
+        u.setLocation(location);
         u.setId(id);
         u.setFirebaseId(firebaseId);
         u.setUsername("oldUser");
@@ -98,7 +93,7 @@ class AdminUserServiceTest {
         // Creating current user
         UserEntity entity = user(42L, firebaseId);
 
-        // location is not needed here so we mock it
+
         LocationDto location = mock(LocationDto.class);
 
         // mock dto that could be sent by admin
@@ -120,6 +115,13 @@ class AdminUserServiceTest {
         // Skip disableUserActions method
         doNothing().when(adminUserService).disableUserActions(any(UserEntity.class));
 
+
+
+     //   when(referralCodeRepository.findByOwner_FirebaseId("deleted_firebase_42")).thenReturn(null);
+
+  //      when(referralCodeUsageRepository.findByUser_FirebaseId("deleted_firebase_42")).thenReturn(null);
+
+
         // Call the method is going ti be tested
         AdminUserEntityDto result = adminUserService.updateUser(firebaseId, dto);
 
@@ -138,8 +140,6 @@ class AdminUserServiceTest {
 
         // Check tha we are returning a response dto
         assertNotNull(result);
-        // verify tha no other db call or service call was made
-        verifyNoMoreInteractions();
     }
 
 
@@ -173,7 +173,7 @@ class AdminUserServiceTest {
     }
 
     @Test
-    void disableUserActions_shouldCancelActiveOwnedAuction_whenEndDateInFuture_andNotExpired() {
+    void disableUserActions_shouldCancelActiveOwnedAuction() {
         // Mock the disabled user entity with id 1L (only user's id is needed for this test)
         UserEntity user = mock(UserEntity.class);
         when(user.getId()).thenReturn(7L);
@@ -185,8 +185,6 @@ class AdminUserServiceTest {
         // Mock an active Auction (that will be assigned to the disabled user)
         Auction activeAuction = mock(Auction.class);
         when(activeAuction.getId()).thenReturn(200L);
-        when(activeAuction.getEndDate()).thenReturn(LocalDateTime.now().plusDays(1));
-        when(activeAuction.getStatus()).thenReturn(AuctionStatus.ACTIVE);
 
         when(auctionRepository.findByOwnerId(7L)).thenReturn(List.of(activeAuction));
 

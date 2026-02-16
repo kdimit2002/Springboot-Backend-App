@@ -17,6 +17,7 @@ import com.example.webapp.BidNow.RetryServices.FirebaseRetryService;
 import com.example.webapp.BidNow.helpers.UserEntityHelper;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
+import com.google.firebase.auth.UserRecord;
 import com.google.firebase.auth.UserRecord.UpdateRequest;
 import jakarta.validation.constraints.Email;
 import org.slf4j.Logger;
