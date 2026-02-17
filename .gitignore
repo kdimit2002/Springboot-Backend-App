@@ -38,3 +38,5 @@ build/
 /src/main/resources/application-local.properties
 /src/main/resources/local-f4b46-firebase-adminsdk-fbsvc-e842917a52.json
 
+keys.pub 
+keys
