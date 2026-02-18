@@ -4,6 +4,8 @@ import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import com.google.firebase.auth.FirebaseAuth;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
@@ -20,6 +22,8 @@ import java.io.InputStream;
  */
 @Configuration
 public class FirebaseConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(FirebaseConfig.class);
 
     /**
      * This bean is for setting up configuration parameters
@@ -50,6 +54,7 @@ public class FirebaseConfig {
         GoogleCredentials creds;
 
         String path = System.getenv("GOOGLE_APPLICATION_CREDENTIALS");
+        log.error(path);
         if (path != null && !path.isBlank()) {
             try (InputStream in = new java.io.FileInputStream(path)) {
                 creds = GoogleCredentials.fromStream(in);
