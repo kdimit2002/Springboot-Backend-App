@@ -46,27 +46,44 @@ public class FirebaseConfig {
 //            return FirebaseApp.initializeApp(options);
 //        }
 //    }
+//    @Bean
+//    public FirebaseApp firebaseApp() throws IOException {
+//        if (!FirebaseApp.getApps().isEmpty()) return FirebaseApp.getInstance();
+//
+//        String projectId = System.getenv().getOrDefault("FIREBASE_PROJECT_ID", "local-f4b46");
+//        GoogleCredentials creds;
+//
+//        String path = System.getenv("GOOGLE_APPLICATION_CREDENTIALS");
+//        log.error(path);
+//        if (path != null && !path.isBlank()) {
+//            try (InputStream in = new java.io.FileInputStream(path)) {
+//                creds = GoogleCredentials.fromStream(in);
+//            }
+//        } else {
+//            try (InputStream in = new ClassPathResource("local-f4b46-firebase-adminsdk-fbsvc-e842917a52.json").getInputStream()) {
+//                creds = GoogleCredentials.fromStream(in);
+//            }
+//        }
+//
+//        FirebaseOptions options = FirebaseOptions.builder()
+//                .setCredentials(creds)
+//                .setProjectId(projectId)
+//                .build();
+//
+//        return FirebaseApp.initializeApp(options);
+//    }
+
+
     @Bean
     public FirebaseApp firebaseApp() throws IOException {
-        if (!FirebaseApp.getApps().isEmpty()) return FirebaseApp.getInstance();
-
-        String projectId = System.getenv().getOrDefault("FIREBASE_PROJECT_ID", "local-f4b46");
-        GoogleCredentials creds;
-
-        String path = System.getenv("GOOGLE_APPLICATION_CREDENTIALS");
-        log.error(path);
-        if (path != null && !path.isBlank()) {
-            try (InputStream in = new java.io.FileInputStream(path)) {
-                creds = GoogleCredentials.fromStream(in);
-            }
-        } else {
-            try (InputStream in = new ClassPathResource("local-f4b46-firebase-adminsdk-fbsvc-e842917a52.json").getInputStream()) {
-                creds = GoogleCredentials.fromStream(in);
-            }
+        if (!FirebaseApp.getApps().isEmpty()) {
+            return FirebaseApp.getInstance();
         }
 
+        String projectId = System.getenv().getOrDefault("FIREBASE_PROJECT_ID", "local-f4b46");
+
         FirebaseOptions options = FirebaseOptions.builder()
-                .setCredentials(creds)
+                .setCredentials(GoogleCredentials.getApplicationDefault())
                 .setProjectId(projectId)
                 .build();
 
