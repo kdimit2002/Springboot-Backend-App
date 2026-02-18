@@ -25,24 +25,48 @@ public class FirebaseConfig {
      * This bean is for setting up configuration parameters
      * It holds common configuration and state for Firebase APIs
      */
+//    @Bean
+//    public FirebaseApp firebaseApp() throws IOException {
+//        // 1) Set up GOOGLE_APPLICATION_CREDENTIALS, and then:
+//        // FirebaseOptions options = FirebaseOptions.builder()
+//        //        .setCredentials(GoogleCredentials.getApplicationDefault())
+//        //        .setProjectId("myProjectId")
+//        //        .build();
+//
+//        // For development
+//        try (InputStream in = new ClassPathResource("local-f4b46-firebase-adminsdk-fbsvc-e842917a52.json").getInputStream()) {
+//            FirebaseOptions options = FirebaseOptions.builder()
+//                    .setCredentials(GoogleCredentials.fromStream(in))
+//                    .setProjectId("local-f4b46")
+//                    .build();
+//            return FirebaseApp.initializeApp(options);
+//        }
+//    }
     @Bean
     public FirebaseApp firebaseApp() throws IOException {
-        // 1) Set up GOOGLE_APPLICATION_CREDENTIALS, and then:
-        // FirebaseOptions options = FirebaseOptions.builder()
-        //        .setCredentials(GoogleCredentials.getApplicationDefault())
-        //        .setProjectId("myProjectId")
-        //        .build();
+        if (!FirebaseApp.getApps().isEmpty()) return FirebaseApp.getInstance();
 
-        // For development
-        try (InputStream in = new ClassPathResource("local-f4b46-firebase-adminsdk-fbsvc-e842917a52.json").getInputStream()) {
-            FirebaseOptions options = FirebaseOptions.builder()
-                    .setCredentials(GoogleCredentials.fromStream(in))
-                    .setProjectId("local-f4b46")
-                    .build();
-            return FirebaseApp.initializeApp(options);
+        String projectId = System.getenv().getOrDefault("FIREBASE_PROJECT_ID", "local-f4b46");
+        GoogleCredentials creds;
+
+        String path = System.getenv("GOOGLE_APPLICATION_CREDENTIALS");
+        if (path != null && !path.isBlank()) {
+            try (InputStream in = new java.io.FileInputStream(path)) {
+                creds = GoogleCredentials.fromStream(in);
+            }
+        } else {
+            try (InputStream in = new ClassPathResource("local-f4b46-firebase-adminsdk-fbsvc-e842917a52.json").getInputStream()) {
+                creds = GoogleCredentials.fromStream(in);
+            }
         }
-    }
 
+        FirebaseOptions options = FirebaseOptions.builder()
+                .setCredentials(creds)
+                .setProjectId(projectId)
+                .build();
+
+        return FirebaseApp.initializeApp(options);
+    }
     /**
      * Load bean that handles all server-side Firebase Authentication actions.
      * Our App server use it to perform a variety of authentication-related operations to
@@ -54,3 +78,6 @@ public class FirebaseConfig {
         return FirebaseAuth.getInstance(app);
     }
 }
+
+
+
