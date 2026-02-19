@@ -8,6 +8,7 @@ import com.google.firebase.auth.FirebaseAuthException;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 
@@ -52,6 +53,7 @@ public class AdminUserEntityController {
      * @return page of users as AdminUserEntityDto
      */
     @GetMapping(value = "/users")
+    //@PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Page<AdminUserEntityDto>> getUsers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -74,6 +76,7 @@ public class AdminUserEntityController {
      * @return user details as AdminUserEntityDto
      */
     @GetMapping(value = "/users/{firebaseId}")
+    //@PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<AdminUserEntityDto> getUser(@PathVariable String firebaseId){
         AdminUserEntityDto adminUserEntityDto = adminUserEntityService.getUser(firebaseId);
         return ResponseEntity.ok(adminUserEntityDto);
@@ -89,6 +92,7 @@ public class AdminUserEntityController {
      * @return user details as AdminUserEntityDto
      */
     @GetMapping(value = "/users/username/{username}")
+    //@PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<AdminUserEntityDto> getUserByUsername(@PathVariable String username){
         AdminUserEntityDto adminUserEntityDto = adminUserEntityService.getUserByUsername(username);
         return ResponseEntity.ok(adminUserEntityDto);
@@ -108,6 +112,7 @@ public class AdminUserEntityController {
      * @return updated user as AdminUserEntityDto
      */
     @PutMapping(value = "/editUser/{firebaseId}")
+    //@PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<AdminUserEntityDto> editUser(
             @PathVariable String firebaseId,
             @RequestBody UserEntityUpdateAdmin userEntityDto) throws FirebaseAuthException {

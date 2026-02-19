@@ -29,23 +29,25 @@ public class FirebaseConfig {
      * This bean is for setting up configuration parameters
      * It holds common configuration and state for Firebase APIs
      */
-//    @Bean
-//    public FirebaseApp firebaseApp() throws IOException {
-//        // 1) Set up GOOGLE_APPLICATION_CREDENTIALS, and then:
-//        // FirebaseOptions options = FirebaseOptions.builder()
-//        //        .setCredentials(GoogleCredentials.getApplicationDefault())
-//        //        .setProjectId("myProjectId")
-//        //        .build();
-//
-//        // For development
-//        try (InputStream in = new ClassPathResource("local-f4b46-firebase-adminsdk-fbsvc-e842917a52.json").getInputStream()) {
-//            FirebaseOptions options = FirebaseOptions.builder()
-//                    .setCredentials(GoogleCredentials.fromStream(in))
-//                    .setProjectId("local-f4b46")
-//                    .build();
-//            return FirebaseApp.initializeApp(options);
-//        }
-//    }
+    @Bean
+    public FirebaseApp firebaseApp() throws IOException {
+        // 1) Set up GOOGLE_APPLICATION_CREDENTIALS, and then:
+        // FirebaseOptions options = FirebaseOptions.builder()
+        //        .setCredentials(GoogleCredentials.getApplicationDefault())
+        //        .setProjectId("myProjectId")
+        //        .build();
+
+        // For development
+        try (InputStream in = new ClassPathResource("local-f4b46-firebase-adminsdk-fbsvc-e842917a52.json").getInputStream()) {
+            FirebaseOptions options = FirebaseOptions.builder()
+                    .setCredentials(GoogleCredentials.fromStream(in))
+                    .setProjectId("local-f4b46")
+                    .build();
+            return FirebaseApp.initializeApp(options);
+        }
+    }
+
+
 //    @Bean
 //    public FirebaseApp firebaseApp() throws IOException {
 //        if (!FirebaseApp.getApps().isEmpty()) return FirebaseApp.getInstance();
@@ -74,21 +76,21 @@ public class FirebaseConfig {
 //    }
 
 
-    @Bean
-    public FirebaseApp firebaseApp() throws IOException {
-        if (!FirebaseApp.getApps().isEmpty()) {
-            return FirebaseApp.getInstance();
-        }
-
-        String projectId = System.getenv().getOrDefault("FIREBASE_PROJECT_ID", "local-f4b46");
-
-        FirebaseOptions options = FirebaseOptions.builder()
-                .setCredentials(GoogleCredentials.getApplicationDefault())
-                .setProjectId(projectId)
-                .build();
-
-        return FirebaseApp.initializeApp(options);
-    }
+//    @Bean
+//    public FirebaseApp firebaseApp() throws IOException {
+//        if (!FirebaseApp.getApps().isEmpty()) {
+//            return FirebaseApp.getInstance();
+//        }
+//
+//        String projectId = System.getenv().getOrDefault("FIREBASE_PROJECT_ID", "local-f4b46");
+//
+//        FirebaseOptions options = FirebaseOptions.builder()
+//                .setCredentials(GoogleCredentials.getApplicationDefault())
+//                .setProjectId(projectId)
+//                .build();
+//
+//        return FirebaseApp.initializeApp(options);
+//    }
     /**
      * Load bean that handles all server-side Firebase Authentication actions.
      * Our App server use it to perform a variety of authentication-related operations to

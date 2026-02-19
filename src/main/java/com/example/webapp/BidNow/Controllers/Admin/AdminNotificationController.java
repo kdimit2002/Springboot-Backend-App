@@ -37,6 +37,7 @@ public class AdminNotificationController {
      * @return JSON with the created announcement id
      */
     @PostMapping("/broadcast")
+    //@PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<?> broadcast(@RequestBody AdminBroadcastNotificationRequest request) {
         Long id = adminAnnouncementService.broadcastGeneral(request);
         return ResponseEntity.ok(Map.of("announcementId", id));

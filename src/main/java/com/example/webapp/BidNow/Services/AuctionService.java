@@ -12,9 +12,6 @@ import com.example.webapp.BidNow.Repositories.*;
 import org.apache.commons.text.similarity.FuzzyScore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.CachePut;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.*;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
@@ -30,7 +27,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 
-import static com.example.webapp.BidNow.Configs.CacheConfig.AUCTIONS_DEFAULT_CACHE;
 import static com.example.webapp.BidNow.helpers.UserEntityHelper.getUserFirebaseId;
 
 /**
@@ -174,19 +170,6 @@ public class AuctionService {
      * @return
      */
     @Transactional
-    @Cacheable(
-            cacheNames = AUCTIONS_DEFAULT_CACHE,//todo: check this if anything goes wrong
-            key = "'p=' + #page + ':e=' + #root.target.isCurrentUserEligibleForBid()",
-            condition =
-                    "(#sortBy == null || #sortBy.isBlank()) && " +
-                            "(#direction == null || #direction.isBlank()) && " +
-                            "#categoryId == null && " +
-                            "(#keyword == null || #keyword.isBlank()) && " +
-                            "(#region == null || #region.isBlank()) && " +
-                            "(#country == null || #country.isBlank()) && " +
-                            "#size == 30",
-            unless = "#result == null || #result.isEmpty()"
-    )
     public Page<AuctionListItemDto> getActiveAuctions(
             String sortBy,
             String direction,
@@ -479,7 +462,6 @@ public class AuctionService {
      */
     @Transactional(readOnly = true)
     public AuctionResponseDto getAuctionById(Long auctionId) {
-        log.info("Auction: {} cache miss", auctionId);
 //        refreshExpiredAuctions();
 
         Auction auction = auctionRepository.findById(auctionId)
@@ -502,7 +484,6 @@ public class AuctionService {
      * @param auctionId
      */
     @Transactional
-    @CacheEvict(cacheNames = AUCTIONS_DEFAULT_CACHE, allEntries = true)
     public void approveAuction(Long auctionId) {
         Auction auction = auctionRepository.findById(auctionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Auction not found"));
@@ -996,7 +977,6 @@ public class AuctionService {
 
 
     @Transactional
-    @CacheEvict(cacheNames = AUCTIONS_DEFAULT_CACHE, allEntries = true)
     public AuctionResponseDto adminEditAuction(Long auctionId,
                                                AuctionAdminUpdateRequest request) {
 

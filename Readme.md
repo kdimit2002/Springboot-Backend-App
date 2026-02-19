@@ -1,5 +1,26 @@
+# Quick Demo / API Access
+
+A live instance of the backend is available for evaluation and testing.
+
+**Swagger UI**  
+https://springboot-backend-app.onrender.com/swagger-ui/index.html
+
+Swagger can be used to explore and invoke API endpoints.
+
+---
+
+## Demo Authentication (Firebase) - Get JWT token
+
+- Press Authorize Button:
+  - username: ken@example.com
+  - password: Password123
+  - press authorize button again
+
+
+## Diagram shows an optional active–passive deployment model; current deployment uses a single instance and is deployed to expose a Swagger UI for easy review and testing.*
+
+
 ![Architecture Diagram](docs/architecture.png)
-*Diagram shows an optional active–passive deployment model; current deployment uses a single instance.*
 
 ## Architecture (High-level)
 
@@ -13,11 +34,10 @@
 - **Image flow:** Backend uploads images to R2, stores the public URL in the DB, and returns URLs to the frontend. The browser then loads images directly from R2.
 - **Planned → Failover:** API runs in an active–passive setup behind a load balancer (routes traffic to Primary; fails over to Standby on health check failure).
 - **Planned → Scheduler Execution Model:** Scheduled jobs are enabled only on the primary instance, if primary is down,then secondary's instance schedulers are automatically enabled
-- **Planned → Disaster Recovery Database:** Weekly exports.
 ---
 
 ## Tech Stack
-- Java 17
+- Java 21
 - Spring Boot
 - PostgreSQL
 - Firebase Authentication (Client + Admin SDK)
@@ -38,11 +58,8 @@
   - **Analytics** 
 
 ### Caching Strategy
-- **Auction caching (Cache Manager):**
-  - Auction reads are cached to reduce DB load.
-- **Rate limiting cache:**
-  - Cache-backed counters are used to enforce request rate limiting efficiently without hitting the DB.
-
+- ** Planned todo → page-level caching for popular auctions
+- 
 ### Reliability: Retry Services 
 To reduce failure rates caused by transient connectivity issues:
 - **FirebaseRetryService** retries transient Firebase calls, in order to maintain a high level of consistency with the database.

@@ -6,12 +6,11 @@ import com.example.webapp.BidNow.Entities.Auction;
 import com.example.webapp.BidNow.Entities.AuctionMessage;
 import com.example.webapp.BidNow.Entities.UserEntity;
 import com.example.webapp.BidNow.Enums.Endpoint;
-import com.example.webapp.BidNow.Exceptions.ResourceNotFoundException;
 import com.example.webapp.BidNow.Repositories.AuctionMessageRepository;
 import com.example.webapp.BidNow.Repositories.AuctionRepository;
 import com.example.webapp.BidNow.Repositories.BidRepository;
 import com.example.webapp.BidNow.Repositories.UserEntityRepository;
-import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cglib.core.Local;
 import org.springframework.http.HttpStatus;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
@@ -101,7 +100,6 @@ public class AuctionChatService {
      * Notes:
      *  - User can send a message to the auction if he meets the requirements
      *  (has bid to the auction, won an auction in the past, placed an auction in the past)
-     *  - Remove auction from cache if someone send message ( Cache must have auction's newest version)
      * @param auctionId
      * @param request
      * @return
@@ -129,6 +127,14 @@ public class AuctionChatService {
                         HttpStatus.NOT_FOUND,
                         "Auction not found"
                 ));
+
+        // cannot send a message to an auction that hasn't been started yet
+        if(auction.getStartDate().isAfter(LocalDateTime.now()))
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "This auction is not active yet"
+            );
+
 
         // cannot send a message to an expired auction
         if (auction.getEndDate().isBefore(LocalDateTime.now())) {

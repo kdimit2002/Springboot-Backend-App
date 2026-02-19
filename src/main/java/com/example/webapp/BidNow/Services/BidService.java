@@ -12,7 +12,6 @@ import com.example.webapp.BidNow.Exceptions.ResourceNotFoundException;
 import com.example.webapp.BidNow.Repositories.AuctionRepository;
 import com.example.webapp.BidNow.Repositories.BidRepository;
 import com.example.webapp.BidNow.Repositories.UserEntityRepository;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
@@ -24,7 +23,6 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 
-import static com.example.webapp.BidNow.Configs.CacheConfig.AUCTIONS_DEFAULT_CACHE;
 import static com.example.webapp.BidNow.helpers.UserEntityHelper.getUserFirebaseId;
 
 /**
@@ -65,12 +63,10 @@ public class BidService {
      * Places a bid for a given auction.
      *
      * Notes:
-     * - Evicts auction cache to force fresh data on next read.
      * - Uses multiple business rules (status, ownership, min increment, anti-last-second bids).
      * - Publishes notifications as events
      * - Sends a WebSocket update AFTER_COMMIT so clients see only committed data.
      */
-    @CacheEvict(cacheNames = AUCTIONS_DEFAULT_CACHE, allEntries = true)
     @Transactional
     public BidEventDto placeBid(Long auctionId, String firebaseId, BigDecimal amount) {
 
@@ -82,6 +78,10 @@ public class BidService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         LocalDateTime now = LocalDateTime.now();
+
+        if(auction.getStartDate().isAfter(now))
+            throw new IllegalArgumentException("This auction is not Active yet");
+
         LocalDateTime end = auction.getEndDate();
         long secondsUntilEnd = Duration.between(now, end).getSeconds();
 

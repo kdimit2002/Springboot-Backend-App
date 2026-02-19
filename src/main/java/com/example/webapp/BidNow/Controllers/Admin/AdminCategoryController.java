@@ -39,6 +39,7 @@ public class AdminCategoryController {
      * @return 200 OK with the created category as {@link CategoryDto}
      */
     @PostMapping("/createCategory")
+    //@PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<CategoryDto> create(@Valid @RequestBody String category) {
         Category created = categoryService.create(category);
         CategoryDto dto = new CategoryDto(created.getId(), created.getName());
@@ -53,6 +54,7 @@ public class AdminCategoryController {
      * @return 200 OK with the updated category as {@link CategoryDto}
      */
     @PutMapping("/updateCategory/{id}")
+    //@PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<CategoryDto> update(@PathVariable Long id,
                                               @Valid @RequestBody String category) {
         Category updated = categoryService.update(id, category);
@@ -67,6 +69,7 @@ public class AdminCategoryController {
      * @return 204 No Content when deletion succeeds
      */
     @DeleteMapping("/deleteCategory/{id}")
+    //@PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         categoryService.delete(id);
         return ResponseEntity.noContent().build();

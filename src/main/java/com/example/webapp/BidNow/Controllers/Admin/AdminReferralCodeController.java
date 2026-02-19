@@ -44,6 +44,7 @@ public class AdminReferralCodeController {
      * @return paginated list of referral codes
      */
     @GetMapping(value = "/referralCodes")
+    //@PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Page<ReferralCodeDtoAdminResponse>> referralCodes(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
@@ -60,6 +61,7 @@ public class AdminReferralCodeController {
      * @return referral code details
      */
     @GetMapping(value = "/referralCodes/{code}")
+    //@PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<ReferralCodeDtoAdminResponse> referralCodes(
             @PathVariable String code
     ){
@@ -80,6 +82,7 @@ public class AdminReferralCodeController {
      * @return created referral code in a small response object
      */
     @PostMapping(value = "/createReferralCode")
+    //@PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<ReferralCodeResponse> createReferralCode(@Valid @RequestBody ReferralCodeRequest referralCodeRequest){
         adminReferralCodeService.createReferralCode(referralCodeRequest);
         return ResponseEntity.ok(new ReferralCodeResponse(referralCodeRequest.code()));
@@ -97,6 +100,7 @@ public class AdminReferralCodeController {
      * @return updated referral code details
      */
     @PatchMapping(value = "/editReferralCode/{id}")
+    //@PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<ReferralCodeDtoAdminResponse> editReferralCode(
             @PathVariable Long id,
             @RequestBody ReferralCodeRequest codeRequest){
