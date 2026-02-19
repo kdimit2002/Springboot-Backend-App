@@ -5,9 +5,6 @@ A live instance of the backend is available for evaluation and testing.
 **Swagger UI**  
 https://springboot-backend-app.onrender.com/swagger-ui/index.html
 
-Swagger can be used to explore and invoke API endpoints.
-
----
 
 ## Demo Authentication (Firebase) - Get JWT token
 
@@ -16,6 +13,7 @@ Swagger can be used to explore and invoke API endpoints.
   - password: Password123
   - press authorize button again
 
+---
 
 ## Diagram shows an optional active–passive deployment model; current deployment uses a single instance and is deployed to expose a Swagger UI for easy review and testing.*
 
