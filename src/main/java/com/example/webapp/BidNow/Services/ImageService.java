@@ -46,7 +46,7 @@ public class ImageService {
         // Only the owner of the auction can upload images.
         Auction auction = auctionRepository
                 .findByIdAndOwnerFirebaseId(auctionId, getUserFirebaseId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.MULTI_STATUS,"You can't upload photo to this auction"));
 
         // max 8 images per auction.
         int existing = auction.getAuctionImages().size();

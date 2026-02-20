@@ -78,6 +78,7 @@ public class NotificationService {
         }
 
         // Global announcements (also mapped to NotificationDto shape).
+        // Give negative id of announcement to avoid id conflicts between announcements and notifications ids
         List<NotificationDto> announcements = announcementRepository
                 .findAll(topN)
                 .map(this::announcementToDto)

@@ -32,17 +32,15 @@ https://springboot-backend-app.onrender.com/swagger-ui/index.html
    - Checking for signup if a user with same username already exists, preventing username conflicts
 8) GET /api/auth/profile:
    - Check your user's profile information
-9) DELETE /api/auth/deleteUser:
-   - User can delete his account
-10) POST /api/auctions/chat/{auctionId}/sendMessage:
+9) POST /api/auctions/chat/{auctionId}/sendMessage:
    - User can send a message to a specific auction if user is eligible for chatting
-11) GET /api/auctions/chat/{auctionId}/getChat:
+10) GET /api/auctions/chat/{auctionId}/getChat:
    - Get the chat of a specific auction
-12) POST /api/admin/notifications/broadcast:
+11) POST /api/admin/notifications/broadcast:
    - Broadcast a notification to every user
-13) GET /api/admin/referralCodes
+12) GET /api/admin/referralCodes
    - Get all referral codes
-14) PATCH /api/admin/auctions/pending 
+13) PATCH /api/admin/auctions/pending 
     - As admin approve a pending auction to make it active
 
 ---

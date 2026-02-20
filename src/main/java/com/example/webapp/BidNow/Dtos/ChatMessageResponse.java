@@ -15,8 +15,8 @@ import java.time.LocalDateTime;
 public class ChatMessageResponse {
 
     private Long id;
-    private String senderDisplayName; // ή email / username
-    private String senderFirebaseId;          // π.χ. firebase id ή user id
+    private String senderDisplayName;
+    private String senderFirebaseId;// todo: probably remove this in the future
     private String content;
     private LocalDateTime createdAt;
 
