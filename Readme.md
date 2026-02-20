@@ -45,7 +45,11 @@ https://springboot-backend-app.onrender.com/swagger-ui/index.html
 
 ---
 
-## Diagram shows an optional active–passive deployment model; current deployment uses a single instance and is deployed to expose a Swagger UI for easy review and testing.*
+![](docs/Uml_diagram.png)
+* UML Diagram of Entity Relationships
+
+
+## The diagram shows the planned active–passive deployment. Currently, a single instance is deployed with Swagger UI for review and testing purposes.*
 
 
 ![Architecture Diagram](docs/architecture.png)
@@ -60,8 +64,7 @@ https://springboot-backend-app.onrender.com/swagger-ui/index.html
 - **Database:** PostgreSQL stores application data (users, auctions, bids).
 - **Storage:** Images are stored in **Cloudflare R2** and served via **public URLs**.
 - **Image flow:** Backend uploads images to R2, stores the public URL in the DB, and returns URLs to the frontend. The browser then loads images directly from R2.
-- **Planned → Failover:** API runs in an active–passive setup behind a load balancer (routes traffic to Primary; fails over to Standby on health check failure).
-- **Planned → Scheduler Execution Model:** Scheduled jobs are enabled only on the primary instance, if primary is down,then secondary's instance schedulers are automatically enabled
+- **Todo: Failover:** API runs in an active–passive setup behind a load balancer (routes traffic to Primary; fails over to Standby on health check failure).
 ---
 
 ## Tech Stack
@@ -77,7 +80,7 @@ https://springboot-backend-app.onrender.com/swagger-ui/index.html
 
 ### Persistence (JPA / Database)
 - **JPA/Hibernate** is used for persistence and domain modeling.
-- An **Admin user** is created manually in the database for security.
+- An **Admin user** is created at application startup in the database for security.
 
 ### Async Processing (Notifications / Emails / Auditing)
 - Notifications and email events are handled **asynchronously** to keep request latency low.
@@ -86,7 +89,7 @@ https://springboot-backend-app.onrender.com/swagger-ui/index.html
   - **Analytics** 
 
 ### Caching Strategy
-- ** Planned todo → page-level caching for popular auctions
+- **Todo:** page-level caching for popular auctions
 - 
 ### Reliability: Retry Services 
 To reduce failure rates caused by transient connectivity issues:
@@ -106,8 +109,8 @@ Schedulers are used for lifecycle management and consistency:
 - **Nightly consistency scheduler (DB ↔ Firebase)**
   - Ensures the system remains consistent between **PostgreSQL** (application source-of-truth) and **Firebase Auth** (identity provider).
   - Example actions:
-    - If a user exists in **Firebase** but is missing in **DB** → the Firebase user is **deleted**.
-    - If Firebase user metadata differs from DB → Firebase data is **updated** to match DB.
+    - If a user exists in **Firebase** but is missing in **DB**, then the Firebase user is **deleted**.
+    - If Firebase user metadata differs from DB, then Firebase data is **updated** to match DB.
 
 ### Security (API Boundary)
 - **RateLimiter filter** (cache-backed) protects the API from abuse and reduces brute-force attempts.
@@ -118,7 +121,7 @@ Schedulers are used for lifecycle management and consistency:
   - User existence in the application database (prevents "valid token but unknown user" edge cases).
 
 #### Planned Security Improvements
-- **XSSSanitizationFilter** is planned to sanitize untrusted inputs at the API boundary.
+- **XSSSanitizationFilter** is planned to sanitize untrusted inputs at the API boundary on Post requests with unknown schema of data.
 
 ---
 
@@ -138,7 +141,7 @@ WebSocket communication does not use an intermediate message broker
 
 ---
 
-## Main External APIs Communication Flows
+## Main External APIs Communication Flows and how frontend should behave
 
 ### Firebase Authentication
 
