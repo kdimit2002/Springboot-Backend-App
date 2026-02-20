@@ -31,12 +31,6 @@ public class FirebaseConfig {
      */
 //    @Bean
 //    public FirebaseApp firebaseApp() throws IOException {
-//        // 1) Set up GOOGLE_APPLICATION_CREDENTIALS, and then:
-//        // FirebaseOptions options = FirebaseOptions.builder()
-//        //        .setCredentials(GoogleCredentials.getApplicationDefault())
-//        //        .setProjectId("myProjectId")
-//        //        .build();
-//
 //        // For development
 //        try (InputStream in = new ClassPathResource("local-f4b46-firebase-adminsdk-fbsvc-e842917a52.json").getInputStream()) {
 //            FirebaseOptions options = FirebaseOptions.builder()
@@ -48,34 +42,9 @@ public class FirebaseConfig {
 //    }
 
 
-//    @Bean
-//    public FirebaseApp firebaseApp() throws IOException {
-//        if (!FirebaseApp.getApps().isEmpty()) return FirebaseApp.getInstance();
-//
-//        String projectId = System.getenv().getOrDefault("FIREBASE_PROJECT_ID", "local-f4b46");
-//        GoogleCredentials creds;
-//
-//        String path = System.getenv("GOOGLE_APPLICATION_CREDENTIALS");
-//        log.error(path);
-//        if (path != null && !path.isBlank()) {
-//            try (InputStream in = new java.io.FileInputStream(path)) {
-//                creds = GoogleCredentials.fromStream(in);
-//            }
-//        } else {
-//            try (InputStream in = new ClassPathResource("local-f4b46-firebase-adminsdk-fbsvc-e842917a52.json").getInputStream()) {
-//                creds = GoogleCredentials.fromStream(in);
-//            }
-//        }
-//
-//        FirebaseOptions options = FirebaseOptions.builder()
-//                .setCredentials(creds)
-//                .setProjectId(projectId)
-//                .build();
-//
-//        return FirebaseApp.initializeApp(options);
-//    }
-
-
+    /**
+     * This bean is for setting up configuration parameters for firebase admin sdk
+     */
     @Bean
     public FirebaseApp firebaseApp() throws IOException {
         if (!FirebaseApp.getApps().isEmpty()) {
