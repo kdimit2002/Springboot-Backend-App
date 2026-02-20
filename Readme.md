@@ -6,12 +6,44 @@ A live instance of the backend is available for evaluation and testing.
 https://springboot-backend-app.onrender.com/swagger-ui/index.html
 
 
-## Demo Authentication (Firebase) - Get JWT token
+## Authentication (Firebase) - Get JWT token
 
 - Press Authorize Button:
   - username: ken@example.com
   - password: Password123
   - press authorize button again
+- You are now signed in and can use other endpoints
+
+
+## Important endpoints to use:
+1) GET /auctions: 
+   - Getting active auctions' important details, this can be used for building the auctions page where users can filter and view all the auctions page by page
+2) POST /auctions:
+   - Creating an auction. User can create an auction and is then going to be in pending status for admin to approve before getting active
+3) GET /actions/{id}:
+   - Users can view more details about the auction such as description and auction's chat
+4) GET /auctions/my:
+   - Inspect your active auctions
+5) POST /api/files/{auctionId}/images:
+   - Uploads a set of images for a specific auction
+6) POST /api/bids/{auctionId}/placeBid:
+   - Bid on a specific auction
+7) GET /api/auth/username-availability:
+   - Checking for signup if a user with same username already exists, preventing username conflicts
+8) GET /api/auth/profile:
+   - Check your user's profile information
+9) DELETE /api/auth/deleteUser:
+   - User can delete his account
+10) POST /api/auctions/chat/{auctionId}/sendMessage:
+   - User can send a message to a specific auction if user is eligible for chatting
+11) GET /api/auctions/chat/{auctionId}/getChat:
+   - Get the chat of a specific auction
+12) POST /api/admin/notifications/broadcast:
+   - Broadcast a notification to every user
+13) GET /api/admin/referralCodes
+   - Get all referral codes
+14) PATCH /api/admin/auctions/pending 
+    - As admin approve a pending auction to make it active
 
 ---
 
