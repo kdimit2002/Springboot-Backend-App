@@ -46,10 +46,10 @@ https://springboot-backend-app.onrender.com/swagger-ui/index.html
 ---
 
 ![](docs/Uml_diagram.png)
-* UML Diagram of Entity Relationships
+***UML Diagram of Entity Relationships***
 
 
-## The diagram shows the planned active–passive deployment. Currently, a single instance is deployed with Swagger UI for review and testing purposes.*
+## The architecture diagram below shows the planned active–passive deployment. Currently, a single instance is deployed with Swagger UI for review and testing purposes.*
 
 
 ![Architecture Diagram](docs/architecture.png)
