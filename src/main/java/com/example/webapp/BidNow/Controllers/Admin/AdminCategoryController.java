@@ -5,6 +5,7 @@ import com.example.webapp.BidNow.Entities.Category;
 import com.example.webapp.BidNow.Enums.Endpoint;
 import com.example.webapp.BidNow.Services.CategoryService;
 import com.example.webapp.BidNow.Services.UserActivityService;
+import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -53,6 +54,7 @@ public class AdminCategoryController {
      * @param category new category name provided as a plain text request body
      * @return 200 OK with the updated category as {@link CategoryDto}
      */
+    @Hidden
     @PutMapping("/updateCategory/{id}")
     //@PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<CategoryDto> update(@PathVariable Long id,
@@ -68,6 +70,7 @@ public class AdminCategoryController {
      * @param id identifier of the category to delete
      * @return 204 No Content when deletion succeeds
      */
+    @Hidden
     @DeleteMapping("/deleteCategory/{id}")
     //@PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {

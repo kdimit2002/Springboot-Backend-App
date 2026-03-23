@@ -5,6 +5,7 @@ import com.example.webapp.BidNow.Entities.Image;
 import com.example.webapp.BidNow.Repositories.AuctionRepository;
 import com.example.webapp.BidNow.Services.ImageService;
 import com.example.webapp.BidNow.Services.R2StorageService;
+import io.swagger.v3.oas.annotations.Hidden;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -76,6 +77,7 @@ public class R2StorageController {
      *
      * Todo: if needed in future change the response type to a DTO
      */
+    @Hidden
     @PostMapping(
             value = "/{auctionId}/image",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE

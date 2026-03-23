@@ -7,6 +7,7 @@ import com.example.webapp.BidNow.Dtos.PageResponse;
 import com.example.webapp.BidNow.Enums.Endpoint;
 import com.example.webapp.BidNow.Services.AuctionService;
 import com.example.webapp.BidNow.Services.UserActivityService;
+import io.swagger.v3.oas.annotations.Hidden;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -95,9 +96,10 @@ public class AdminAuctionController {
      * @param statusGroup group for the user's auctions (default ACTIVE)
      * @return PageResponse of user's own auctions
      */
+    @Hidden
     @GetMapping("/adminGetNonActiveAuctions")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<PageResponse<AuctionListItemDto>> getMyAuctions(
+    public ResponseEntity<PageResponse<AuctionListItemDto>> getMyAuctions( // todo: correct naming
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "30") int size,
             @RequestParam(required = false) String sortBy,
@@ -133,6 +135,7 @@ public class AdminAuctionController {
      *
      */
     @PatchMapping("/{id}")
+    @Hidden
     //@PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<AuctionResponseDto> editAuction(
             @PathVariable Long id,

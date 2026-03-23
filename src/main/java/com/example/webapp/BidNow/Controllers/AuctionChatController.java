@@ -56,7 +56,9 @@ public class AuctionChatController {
      * @param auctionId auction id
      * @param request   message payload (e.g. content, receiver info, etc.)
      * @return the created message
-     */    @PostMapping("/{auctionId}/sendMessage")
+     */
+
+    @PostMapping("/{auctionId}/sendMessage")
     public ResponseEntity<ChatMessageResponse> sendMessage(
             @PathVariable Long auctionId,
             @RequestBody ChatMessageRequest request) {

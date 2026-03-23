@@ -4,6 +4,7 @@ import com.example.webapp.BidNow.Dtos.ReferralCodeDtoAdminResponse;
 import com.example.webapp.BidNow.Dtos.ReferralCodeRequest;
 import com.example.webapp.BidNow.Services.AdminReferralCodeService;
 import com.example.webapp.BidNow.Services.AdminUserEntityService;
+import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.data.domain.Page;
@@ -60,6 +61,7 @@ public class AdminReferralCodeController {
      * @param code referral code value
      * @return referral code details
      */
+    @Hidden
     @GetMapping(value = "/referralCodes/{code}")
     //@PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<ReferralCodeDtoAdminResponse> referralCodes(
@@ -99,6 +101,7 @@ public class AdminReferralCodeController {
      * @param codeRequest updated referral code payload
      * @return updated referral code details
      */
+    @Hidden
     @PatchMapping(value = "/editReferralCode/{id}")
     //@PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<ReferralCodeDtoAdminResponse> editReferralCode(

@@ -2,6 +2,7 @@ package com.example.webapp.BidNow.Controllers.Admin;
 
 import com.example.webapp.BidNow.Dtos.AdminBroadcastNotificationRequest;
 import com.example.webapp.BidNow.Services.AdminAnnouncementService;
+import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -37,6 +38,7 @@ public class AdminNotificationController {
      * @return JSON with the created announcement id
      */
     @PostMapping("/broadcast")
+    @Hidden
     //@PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<?> broadcast(@RequestBody AdminBroadcastNotificationRequest request) {
         Long id = adminAnnouncementService.broadcastGeneral(request);

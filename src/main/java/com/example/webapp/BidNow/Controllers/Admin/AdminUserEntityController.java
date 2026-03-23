@@ -5,6 +5,7 @@ import com.example.webapp.BidNow.Dtos.UserEntityUpdateAdmin;
 import com.example.webapp.BidNow.Services.AdminUserEntityService;
 import com.example.webapp.BidNow.Services.UserActivityService;
 import com.google.firebase.auth.FirebaseAuthException;
+import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
@@ -75,6 +76,7 @@ public class AdminUserEntityController {
      * @param firebaseId firebase user identifier
      * @return user details as AdminUserEntityDto
      */
+    @Hidden
     @GetMapping(value = "/users/{firebaseId}")
     //@PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<AdminUserEntityDto> getUser(@PathVariable String firebaseId){
@@ -111,6 +113,7 @@ public class AdminUserEntityController {
      * @param userEntityDto update payload (admin fields)
      * @return updated user as AdminUserEntityDto
      */
+    @Hidden
     @PutMapping(value = "/editUser/{firebaseId}")
     //@PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<AdminUserEntityDto> editUser(

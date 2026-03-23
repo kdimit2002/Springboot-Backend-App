@@ -15,7 +15,6 @@ public class AuctionCreateRequest {
     @Size(max = 100, message = "Title must be at most 100 characters")
     private String title;
 
-    // μικρή περιγραφή για τη λίστα
     @NotBlank
     @Size(max = 100)
     private String shortDescription;

@@ -4,6 +4,7 @@ import com.example.webapp.BidNow.Dtos.LocationDto;
 import com.example.webapp.BidNow.Services.LocationService;
 import com.example.webapp.BidNow.Services.UserEntityService;
 import com.example.webapp.BidNow.helpers.UserEntityHelper;
+import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -41,6 +42,7 @@ public class LocationController {
      *
      * @return user's location as LocationDto
      */
+    @Hidden
     @GetMapping
     public ResponseEntity<LocationDto> getMyLocation() {
         LocationDto location = locationService.getUserLocation(getUserFirebaseId());
@@ -56,6 +58,7 @@ public class LocationController {
      * @param dto new location data
      * @return 200 OK when update succeeds
      */
+    @Hidden
     @PutMapping("/update")
     public ResponseEntity<Void> updateMyLocation(@Valid @RequestBody LocationDto dto) {
         locationService.updateUserLocation(getUserFirebaseId(), dto);

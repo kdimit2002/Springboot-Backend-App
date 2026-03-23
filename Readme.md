@@ -13,11 +13,12 @@ https://springboot-backend-app.onrender.com/swagger-ui/index.html
   - password: Password123
   - press authorize button again
 - You are now signed in and can use other endpoints
+- Some endpoints are hidden from swagger for a cleaner endpoint structure purpose
 
 
 ## Important endpoints to use:
 1) GET /auctions: 
-   - Getting active auctions' important details, this can be used for building the auctions page where users can filter and view all the auctions page by page
+   - Fetches important details of active auctions in a paginated list, supporting search, filtering, and sorting.
 2) POST /auctions:
    - Creating an auction. User can create an auction and is then going to be in pending status for admin to approve before getting active
 3) GET /actions/{id}:
@@ -27,21 +28,19 @@ https://springboot-backend-app.onrender.com/swagger-ui/index.html
 5) POST /api/files/{auctionId}/images:
    - Uploads a set of images for a specific auction
 6) POST /api/bids/{auctionId}/placeBid:
-   - Bid on a specific auction
-7) GET /api/auth/username-availability:
-   - Checking for signup if a user with same username already exists, preventing username conflicts
-8) GET /api/auth/profile:
+   - Bid on a specific auction]
+7) GET /api/auth/profile:
    - Check your user's profile information
-9) POST /api/auctions/chat/{auctionId}/sendMessage:
+8) POST /api/auctions/chat/{auctionId}/sendMessage:
    - User can send a message to a specific auction if user is eligible for chatting
-10) GET /api/auctions/chat/{auctionId}/getChat:
+9) GET /api/auctions/chat/{auctionId}/getChat:
    - Get the chat of a specific auction
-11) POST /api/admin/notifications/broadcast:
-   - Broadcast a notification to every user
-12) GET /api/admin/referralCodes
+10) GET /api/admin/referralCodes
    - Get all referral codes
-13) PATCH /api/admin/auctions/pending 
-    - As admin approve a pending auction to make it active
+11) GET /api/admin/auctions/pending
+   - Get all pending auctions.(Auctions that need approval and are not visible to simple users yet)
+12) PATCH /api/admin/auctions/{id}/approve
+    - As admin approve a pending auction to make it active (get id from GET pending auctions endpoint)
 
 ---
 
@@ -56,10 +55,10 @@ https://springboot-backend-app.onrender.com/swagger-ui/index.html
 
 ## Architecture (High-level)
 
-- **Frontend:** React (Vite) SPA served as static assets.
+- **Planned - Frontend:** React (Vite)
 - **Backend:** Spring Boot application (REST API + schedulers + async tasks).
 - **Auth:** Firebase Authentication
-  - Frontend uses Firebase Client SDK to sign in and obtain an ID token.
+  - Planned: Frontend uses Firebase Client SDK to sign in and obtain an ID token.
   - Backend verifies the token using Firebase Admin SDK (JWT verification at the API boundary).
 - **Database:** PostgreSQL stores application data (users, auctions, bids).
 - **Storage:** Images are stored in **Cloudflare R2** and served via **public URLs**.
@@ -125,12 +124,12 @@ Schedulers are used for lifecycle management and consistency:
 
 ---
 
-## Realtime Features (Roadmap)
+## Realtime Features
 
 ### WebSockets
 Real-time communication supports:
 - **Live bids updates** in auctions.
-- **Auction chat** between participants with near real-time delivery.
+- **Auction chat** between participants.
 
 Implementation includes, Event-driven updates.
 
@@ -169,12 +168,11 @@ WebSocket communication does not use an intermediate message broker
 #### Planned: Get Image Flow
 - The browser fetches application data from the backend (auctions), which includes **public image URLs** stored in the DB.
 - The browser then downloads images **directly from Cloudflare R2** using those URLs.
-- This keeps the backend out of the heavy bandwidth path and improves performance.
 
 ![Get Image Flow](docs/R2StorageGetImageFlow.png)
 
 #### Upload Image Flow
-- The browser uploads an image to the backend (protected endpoint).
+- The browser uploads an image to the backend.
 - Backend uploads the binary to **Cloudflare R2** and generates a **public URL**.
 - Backend stores the image URL/metadata in PostgreSQL and returns the URL to the client.
 

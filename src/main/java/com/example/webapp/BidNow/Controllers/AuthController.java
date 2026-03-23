@@ -9,6 +9,7 @@ import com.example.webapp.BidNow.Services.SignupService;
 import com.example.webapp.BidNow.Services.UserActivityService;
 import com.example.webapp.BidNow.Services.UserEntityService;
 import com.google.firebase.auth.FirebaseAuthException;
+import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -66,6 +67,7 @@ public class AuthController {
      * @param signUpRequest signup payload (avatar, role, location, etc.)
      * @return AuthUserDto for the newly registered user
      */
+    @Hidden
     @PostMapping(value = "/signup")
     public ResponseEntity<AuthUserDto> registerUser(@Valid @RequestBody SignUpRequest signUpRequest) throws IOException, FirebaseAuthException {
         LocationDto location = signUpRequest.locationDto(); // todo: logic must be removed from here
@@ -89,6 +91,7 @@ public class AuthController {
      *
      * @return AuthUserDto for the signed-in user
      */
+    @Hidden
     @GetMapping(value = "/login")
     public ResponseEntity<AuthUserDto> signIn(){
         userActivityService.saveUserActivityAsync(Endpoint.USER_SIGNIN,"User:" + getUserFirebaseId() + " just signed in");
@@ -111,6 +114,7 @@ public class AuthController {
      *
      * @return 204 No Content when deletion/anonymization succeeds
      */
+    @Hidden
     @DeleteMapping(value = "/deleteUser")
     public ResponseEntity<Void> deleteUser() throws FirebaseAuthException {
         userEntityService.anonymizeUser();
@@ -155,6 +159,7 @@ public class AuthController {
      * @param avatar new avatar selection
      * @return updated avatar name
      */
+    @Hidden
     @PatchMapping(value = "/updateAvatar")
     public ResponseEntity<UserUpdateResponse> updateAvatar(@Valid @RequestBody Avatar avatar){
         userEntityService.updateAvatar(avatar);
@@ -169,6 +174,7 @@ public class AuthController {
      * @param usernameUpdateRequest new username payload
      * @return updated username
      */
+    @Hidden
     @PatchMapping(value = "/updateUsername")
     public ResponseEntity<UserUpdateResponse> updateUsername(@Valid@RequestBody UserUpdateRequest usernameUpdateRequest){
         userEntityService.updateUsername(usernameUpdateRequest.name());
@@ -184,6 +190,7 @@ public class AuthController {
      * @param locationDto new location payload
      * @return the same location payload (confirmation)
      */
+    @Hidden
     @PatchMapping(value = "/updateLocation")
     public ResponseEntity<LocationDto> updateLocation(@Valid@RequestBody LocationDto locationDto){
         userEntityService.updateLocation(locationDto);
@@ -210,6 +217,7 @@ public class AuthController {
      * @param roleRequest role payload
      * @return updated role name
      */
+    @Hidden
     @PatchMapping(value = "/updateRole")
     public ResponseEntity<UserUpdateResponse> updateRole(@Valid @RequestBody RoleRequest roleRequest){
         userEntityService.updateRole(roleRequest.name());
@@ -233,6 +241,7 @@ public class AuthController {
      * @return availability result
      *
      */
+    @Hidden
     @GetMapping(value = "/username-availability")
     public ResponseEntity<UsernameAvailabilityResponse> checkUsername(@RequestParam String username) {
         boolean exists = userEntityRepository.existsByUsername(username);
@@ -261,6 +270,7 @@ public class AuthController {
      * @param request email + phone number
      * @return message describing the next step or conflict
      */
+  @Hidden
   @PostMapping(value = "/user-availability")
     public ResponseEntity<UserAvailabilityResponse> userExists(@Valid @RequestBody UserAvailabilityRequest request) {
         if(!userEntityRepository.existsByEmail(request.email()) && !userEntityRepository.existsByPhoneNumber(request.phoneNumber())){

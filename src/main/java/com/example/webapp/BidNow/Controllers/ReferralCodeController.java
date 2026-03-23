@@ -4,6 +4,7 @@ package com.example.webapp.BidNow.Controllers;
 import com.example.webapp.BidNow.Dtos.ReferralCodeUsageResponse;
 import com.example.webapp.BidNow.Dtos.ReferralCodeUserResponse;
 import com.example.webapp.BidNow.Services.ReferralCodeService;
+import io.swagger.v3.oas.annotations.Hidden;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -61,6 +62,7 @@ public class ReferralCodeController {
      * @param size page size (default 10)
      * @return page of usage entries as ReferralCodeUsageResponse
      */
+    @Hidden
     @GetMapping(value = "/getCodeUsage")
     public ResponseEntity<Page<ReferralCodeUsageResponse>> referralCodeUsage(
             @RequestParam(defaultValue = "0") int page,
@@ -77,6 +79,7 @@ public class ReferralCodeController {
      *
      * @return ReferralCodeUserResponse indicating whether the user is part of the referral program
      */
+    @Hidden
     @GetMapping(value = "/isReferralCodeUser")
     public ResponseEntity<ReferralCodeUserResponse> isReferralCodeUser(
     ) {

@@ -7,6 +7,7 @@ import com.example.webapp.BidNow.Dtos.PageResponse;
 import com.example.webapp.BidNow.Enums.Endpoint;
 import com.example.webapp.BidNow.Services.AuctionService;
 import com.example.webapp.BidNow.Services.UserActivityService;
+import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
@@ -166,6 +167,7 @@ public class AuctionController {
      * @param direction optional sort direction
      * @return PageResponse of auctions the user has bid on
      */
+    @Hidden
     @GetMapping("/my-bids")
     @PreAuthorize("hasAnyRole('BIDDER','AUCTIONEER','ADMIN')")
     public ResponseEntity<PageResponse<AuctionListItemDto>> getMyActiveBidAuctions(

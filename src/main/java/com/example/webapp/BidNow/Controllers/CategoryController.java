@@ -3,6 +3,7 @@ package com.example.webapp.BidNow.Controllers;
 import com.example.webapp.BidNow.Dtos.CategoryDto;
 import com.example.webapp.BidNow.Entities.Category;
 import com.example.webapp.BidNow.Services.CategoryService;
+import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -35,13 +36,15 @@ public class CategoryController {
      * GET /api/categories
      *
      * @return list of categories as CategoryDto
-     */    @GetMapping
+     */
+    @GetMapping
     public ResponseEntity<List<CategoryDto>> getAll() {
         return ResponseEntity.ok(categoryService.getAll());
     }
 
 
     // NOT USED
+    @Hidden
     @GetMapping("/{id}")
     public ResponseEntity<String> getById(@PathVariable Long id) {
         return ResponseEntity.ok(categoryService.getById(id));
